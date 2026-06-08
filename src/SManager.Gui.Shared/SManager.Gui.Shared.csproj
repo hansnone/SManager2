@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>SManager.Gui.Shared</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SManager.Core\SManager.Core.csproj" />
+    <ProjectReference Include="..\SManager.Ipc\SManager.Ipc.csproj" />
+  </ItemGroup>
+
+</Project>
+

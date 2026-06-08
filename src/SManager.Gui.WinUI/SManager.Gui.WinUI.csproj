@@ -1,0 +1,112 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+
+
+  <PropertyGroup>
+
+    <OutputType>WinExe</OutputType>
+
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+
+    <RootNamespace>SManager.Gui.WinUI</RootNamespace>
+
+    <AssemblyName>SManager.Gui.WinUI</AssemblyName>
+
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <Platforms>x64</Platforms>
+
+    <Platform>x64</Platform>
+
+    <PlatformTarget>x64</PlatformTarget>
+
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+
+    <UseWinUI>true</UseWinUI>
+
+    <EnableMsixTooling>true</EnableMsixTooling>
+
+    <WindowsPackageType>None</WindowsPackageType>
+
+    <!-- App unpackaged: incluye el runtime de Windows App SDK para no depender de instalación global -->
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <Nullable>enable</Nullable>
+
+    <PublishTrimmed>false</PublishTrimmed>
+
+  </PropertyGroup>
+
+
+
+  <ItemGroup>
+
+    <Manifest Include="$(ApplicationManifest)" />
+
+  </ItemGroup>
+
+
+
+  <ItemGroup>
+
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.1839" />
+
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.1.3" />
+
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinApp" Version="0.3.2" />
+
+  </ItemGroup>
+
+
+
+  <ItemGroup>
+
+    <ProjectReference Include="..\SManager.Core\SManager.Core.csproj" />
+
+    <ProjectReference Include="..\SManager.Ipc\SManager.Ipc.csproj" />
+
+    <ProjectReference Include="..\SManager.Gui.Shared\SManager.Gui.Shared.csproj" />
+
+  </ItemGroup>
+
+
+
+  <Target Name="CopiarHerramientasSManager" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+
+    <PropertyGroup>
+
+      <CarpetaHerramientas>$(OutputPath)herramientas\</CarpetaHerramientas>
+
+      <CarpetaSalidaCli>$(MSBuildThisFileDirectory)..\SManager.Cli\bin\$(Configuration)\net8.0\</CarpetaSalidaCli>
+
+      <CarpetaSalidaHost>$(MSBuildThisFileDirectory)..\SManager.Host\bin\$(Configuration)\net8.0\</CarpetaSalidaHost>
+
+    </PropertyGroup>
+
+    <MakeDir Directories="$(CarpetaHerramientas)" />
+
+    <ItemGroup>
+
+      <ArchivosCli Include="$(CarpetaSalidaCli)**\*.*" Condition="Exists('$(CarpetaSalidaCli)')" />
+
+      <ArchivosHost Include="$(CarpetaSalidaHost)**\*.*" Condition="Exists('$(CarpetaSalidaHost)')" />
+
+    </ItemGroup>
+
+    <Copy SourceFiles="@(ArchivosCli)" DestinationFolder="$(CarpetaHerramientas)" SkipUnchangedFiles="true" Condition="'@(ArchivosCli)' != ''" />
+
+    <Copy SourceFiles="@(ArchivosHost)" DestinationFolder="$(CarpetaHerramientas)" SkipUnchangedFiles="true" Condition="'@(ArchivosHost)' != ''" />
+
+  </Target>
+
+
+
+</Project>
+
+

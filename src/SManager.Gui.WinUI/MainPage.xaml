@@ -1,0 +1,496 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Name="PaginaPrincipal"
+    x:Class="SManager.Gui.WinUI.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="using:SManager.Gui.WinUI.Models"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <Style x:Key="CabeceraColumna" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        </Style>
+        <Style x:Key="CeldaFila" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="ToolTipService.ToolTip" Value="{Binding Text}" />
+        </Style>
+        <Style x:Key="TituloSeccion" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style x:Key="SubtituloSeccion" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="WrapWholeWords" />
+            <Setter Property="Margin" Value="0,4,0,0" />
+        </Style>
+        <Style x:Key="EtiquetaGrupo" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,16,0,8" />
+        </Style>
+        <Style x:Key="BotonExaminarCarpeta" TargetType="Button">
+            <Setter Property="Content" Value="…" />
+            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="MinWidth" Value="36" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="ToolTipService.ToolTip" Value="Examinar carpeta" />
+        </Style>
+        <Style x:Key="Tarjeta" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="16" />
+        </Style>
+    </Page.Resources>
+
+    <NavigationView
+        x:Name="NavPrincipal"
+        IsBackButtonVisible="Collapsed"
+        IsSettingsVisible="True"
+        PaneDisplayMode="Left"
+        SelectionChanged="NavPrincipal_SelectionChanged">
+
+        <!-- Perfil en el panel lateral -->
+        <NavigationView.PaneHeader>
+            <StackPanel Margin="12,16,12,8" Spacing="8">
+                <TextBlock
+                    Text="Perfil activo"
+                    Style="{ThemeResource CaptionTextBlockStyle}"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <ComboBox
+                    HorizontalAlignment="Stretch"
+                    ItemsSource="{x:Bind ViewModel.Perfiles, Mode=OneWay}"
+                    SelectedItem="{x:Bind ViewModel.PerfilSeleccionado, Mode=TwoWay}"
+                    SelectionChanged="Perfil_SelectionChanged" />
+                <Button
+                    HorizontalAlignment="Stretch"
+                    Content="Nuevo perfil"
+                    Command="{x:Bind ViewModel.NuevoPerfilCommand}" />
+            </StackPanel>
+        </NavigationView.PaneHeader>
+
+        <NavigationView.MenuItems>
+            <NavigationViewItem Content="Inicio" Tag="inicio">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Home" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="Sincronización" Tag="pares">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Sync" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="Monitor" Tag="monitor">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="View" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="Registro" Tag="registro">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Document" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+        </NavigationView.MenuItems>
+
+        <!-- Contenido principal -->
+        <Grid RowSpacing="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Barra de acciones del demonio -->
+            <Border
+                Grid.Row="0"
+                Padding="20,12"
+                Background="{ThemeResource LayerFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="0,0,0,1">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Ellipse
+                                Width="10"
+                                Height="10"
+                                VerticalAlignment="Center"
+                                Fill="{x:Bind ViewModel.ColorEstado, Mode=OneWay}" />
+                            <TextBlock
+                                FontWeight="SemiBold"
+                                Text="{x:Bind ViewModel.TextoEstado, Mode=OneWay}" />
+                        </StackPanel>
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="{x:Bind ViewModel.RutaConfiguracion, Mode=OneWay}"
+                            TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+
+                    <StackPanel
+                        Grid.Column="1"
+                        Orientation="Horizontal"
+                        Spacing="8"
+                        VerticalAlignment="Center">
+                        <Button
+                            Content="Iniciar"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Command="{x:Bind ViewModel.IniciarCommand}" />
+                        <Button Content="Detener" Command="{x:Bind ViewModel.DetenerCommand}" />
+                        <Button Content="Recargar" Command="{x:Bind ViewModel.RecargarCommand}" />
+                        <Button Content="Guardar" Command="{x:Bind ViewModel.GuardarCommand}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Aviso cuando el demonio bloquea la edición -->
+            <InfoBar
+                Grid.Row="1"
+                Title="Sincronización activa"
+                Message="La configuración está bloqueada mientras el demonio corre. Para aplicar cambios del JSON en disco, usa Recargar."
+                Severity="Informational"
+                IsOpen="{x:Bind ViewModel.DemonioEnEjecucion, Mode=OneWay}"
+                IsClosable="False" />
+
+            <Grid Grid.Row="2" Padding="20,16">
+
+                <!-- INICIO -->
+                <ScrollViewer
+                    x:Name="PanelInicio"
+                    VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="16" MaxWidth="900">
+                        <StackPanel Spacing="4">
+                            <TextBlock Style="{StaticResource TituloSeccion}" Text="Panel de control" />
+                            <TextBlock
+                                Style="{StaticResource SubtituloSeccion}"
+                                Text="Resumen del estado actual y accesos rápidos a las secciones principales." />
+                        </StackPanel>
+
+                        <Border Style="{StaticResource Tarjeta}">
+                            <StackPanel Spacing="12">
+                                <TextBlock FontWeight="SemiBold" Text="Estado del servicio" />
+                                <TextBlock Text="{x:Bind ViewModel.TextoResumen, Mode=OneWay}" TextWrapping="Wrap" />
+                                <TextBlock
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="{x:Bind ViewModel.TextoPolling, Mode=OneWay}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Tarjeta}">
+                            <StackPanel Spacing="10">
+                                <TextBlock FontWeight="SemiBold" Text="Primeros pasos" />
+                                <TextBlock Text="1. Define los pares origen → destino en Sincronización." />
+                                <TextBlock Text="2. Pulsa Guardar para escribir el JSON del perfil." />
+                                <TextBlock Text="3. Pulsa Iniciar para lanzar el demonio." />
+                                <TextBlock Text="4. Sigue el progreso en Monitor y Registro." />
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                                    <Button Click="IrASincronizacion_Click" Content="Ir a sincronización" />
+                                    <Button Click="IrAMonitor_Click" Content="Ver monitor" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- SINCRONIZACIÓN (PARES) -->
+                <Grid
+                    x:Name="PanelPares"
+                    RowSpacing="12"
+                    Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Spacing="4">
+                        <TextBlock Style="{StaticResource TituloSeccion}" Text="Pares de sincronización" />
+                        <TextBlock
+                            Style="{StaticResource SubtituloSeccion}"
+                            Text="Cada fila es una ruta origen → destino. Usa … para elegir carpetas. Filtro * incluye todos los archivos." />
+                    </StackPanel>
+
+                    <CommandBar
+                        Grid.Row="1"
+                        DefaultLabelPosition="Right"
+                        Background="Transparent">
+                        <AppBarButton
+                            Icon="Add"
+                            Label="Añadir par"
+                            Command="{x:Bind ViewModel.AnadirParCommand}" />
+                        <AppBarButton
+                            Icon="Remove"
+                            Label="Quitar par"
+                            Command="{x:Bind ViewModel.QuitarParCommand}" />
+                        <AppBarSeparator />
+                        <AppBarButton
+                            Icon="Accept"
+                            Label="Validar rutas"
+                            Command="{x:Bind ViewModel.ValidarRutasCommand}" />
+                    </CommandBar>
+
+                    <Border Grid.Row="2" Style="{StaticResource Tarjeta}" Padding="0">
+                        <ListView
+                            ItemsSource="{x:Bind ViewModel.Pares, Mode=OneWay}"
+                            SelectedItem="{x:Bind ViewModel.ParSeleccionado, Mode=TwoWay}"
+                            IsItemClickEnabled="False"
+                            SelectionMode="Single">
+                            <ListView.Header>
+                                <Grid Padding="12,8,12,4" ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="48" />
+                                        <ColumnDefinition Width="56" />
+                                        <ColumnDefinition Width="1.1*" MinWidth="90" />
+                                        <ColumnDefinition Width="2*" MinWidth="160" />
+                                        <ColumnDefinition Width="2*" MinWidth="160" />
+                                        <ColumnDefinition Width="1*" MinWidth="90" />
+                                        <ColumnDefinition Width="1*" MinWidth="90" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Activo" Style="{StaticResource CabeceraColumna}" />
+                                    <TextBlock Grid.Column="1" Text="Pausa" Style="{StaticResource CabeceraColumna}" />
+                                    <TextBlock Grid.Column="2" Text="Nombre" Style="{StaticResource CabeceraColumna}" />
+                                    <TextBlock Grid.Column="3" Text="Origen" Style="{StaticResource CabeceraColumna}" />
+                                    <TextBlock Grid.Column="4" Text="Destino" Style="{StaticResource CabeceraColumna}" />
+                                    <TextBlock Grid.Column="5" Text="Incluir" Style="{StaticResource CabeceraColumna}" />
+                                    <TextBlock Grid.Column="6" Text="Excluir" Style="{StaticResource CabeceraColumna}" />
+                                </Grid>
+                            </ListView.Header>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="models:ParFilaViewModel">
+                                    <Grid Padding="12,6" ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="48" />
+                                            <ColumnDefinition Width="56" />
+                                            <ColumnDefinition Width="1.1*" MinWidth="90" />
+                                            <ColumnDefinition Width="2*" MinWidth="160" />
+                                            <ColumnDefinition Width="2*" MinWidth="160" />
+                                            <ColumnDefinition Width="1*" MinWidth="90" />
+                                            <ColumnDefinition Width="1*" MinWidth="90" />
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox Grid.Column="0" IsChecked="{x:Bind Habilitado, Mode=TwoWay}" IsEnabled="{Binding DataContext.PuedeEditarConfig, ElementName=PaginaPrincipal}" />
+                                        <CheckBox Grid.Column="1" IsChecked="{x:Bind Pausado, Mode=TwoWay}" IsEnabled="{Binding DataContext.PuedeEditarConfig, ElementName=PaginaPrincipal}" />
+                                        <TextBox Grid.Column="2" PlaceholderText="Nombre del par" Text="{x:Bind Nombre, Mode=TwoWay}" IsEnabled="{Binding DataContext.PuedeEditarConfig, ElementName=PaginaPrincipal}" />
+                                        <Grid Grid.Column="3" ColumnSpacing="4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox Grid.Column="0" PlaceholderText="Carpeta origen" Text="{x:Bind RutaOrigen, Mode=TwoWay}" IsEnabled="{Binding DataContext.PuedeEditarConfig, ElementName=PaginaPrincipal}" />
+                                            <Button Grid.Column="1" Style="{StaticResource BotonExaminarCarpeta}" ToolTipService.ToolTip="Examinar origen" Command="{x:Bind ExaminarOrigenCommand}" IsEnabled="{Binding DataContext.PuedeEditarConfig, ElementName=PaginaPrincipal}" />
+                                        </Grid>
+                                        <Grid Grid.Column="4" ColumnSpacing="4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox Grid.Column="0" PlaceholderText="Carpeta destino" Text="{x:Bind RutaDestino, Mode=TwoWay}" IsEnabled="{Binding DataContext.PuedeEditarConfig, ElementName=PaginaPrincipal}" />
+                                            <Button Grid.Column="1" Style="{StaticResource BotonExaminarCarpeta}" ToolTipService.ToolTip="Examinar destino" Command="{x:Bind ExaminarDestinoCommand}" IsEnabled="{Binding DataContext.PuedeEditarConfig, ElementName=PaginaPrincipal}" />
+                                        </Grid>
+                                        <TextBox Grid.Column="5" PlaceholderText="*" Text="{x:Bind FiltroInclusion, Mode=TwoWay}" IsEnabled="{Binding DataContext.PuedeEditarConfig, ElementName=PaginaPrincipal}" />
+                                        <TextBox Grid.Column="6" PlaceholderText="*.tmp" Text="{x:Bind FiltroExclusion, Mode=TwoWay}" IsEnabled="{Binding DataContext.PuedeEditarConfig, ElementName=PaginaPrincipal}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Border>
+                </Grid>
+
+                <!-- MONITOR -->
+                <Grid
+                    x:Name="PanelMonitor"
+                    RowSpacing="16"
+                    Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="1.2*" MinHeight="100" />
+                        <RowDefinition Height="*" MinHeight="80" />
+                        <RowDefinition Height="1.8*" MinHeight="140" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Spacing="4">
+                        <TextBlock Style="{StaticResource TituloSeccion}" Text="Monitor en tiempo real" />
+                        <TextBlock
+                            Style="{StaticResource SubtituloSeccion}"
+                            Text="Estado de cada par, copias en curso y actividad reciente. Se actualiza cada medio segundo." />
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="1" Spacing="6">
+                        <TextBlock Style="{StaticResource EtiquetaGrupo}" Text="Estado por par" />
+                        <Border Style="{StaticResource Tarjeta}" Padding="0">
+                            <ListView ItemsSource="{x:Bind ViewModel.MonitorPares, Mode=OneWay}" IsHitTestVisible="False">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="models:MonitorParViewModel">
+                                        <Grid ColumnSpacing="8" Padding="8,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="2*" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{x:Bind Nombre}" Style="{StaticResource CeldaFila}" />
+                                            <TextBlock Grid.Column="1" Text="{x:Bind Estado}" Style="{StaticResource CeldaFila}" />
+                                            <TextBlock Grid.Column="2" Text="{x:Bind Copiados}" Style="{StaticResource CeldaFila}" />
+                                            <TextBlock Grid.Column="3" Text="{x:Bind Errores}" Style="{StaticResource CeldaFila}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="2" Spacing="6">
+                        <TextBlock Style="{StaticResource EtiquetaGrupo}" Text="Copiando ahora" />
+                        <Border Style="{StaticResource Tarjeta}" Padding="0">
+                            <ListView ItemsSource="{x:Bind ViewModel.CopiasEnCurso, Mode=OneWay}" IsHitTestVisible="False">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="models:CopiaEnCursoViewModel">
+                                        <Grid ColumnSpacing="8" Padding="8,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="3*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{x:Bind Copiador}" Style="{StaticResource CeldaFila}" />
+                                            <TextBlock Grid.Column="1" Text="{x:Bind Archivo}" Style="{StaticResource CeldaFila}" />
+                                            <TextBlock Grid.Column="2" Text="{x:Bind IdPar}" Style="{StaticResource CeldaFila}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="3" Spacing="6">
+                        <TextBlock Style="{StaticResource EtiquetaGrupo}" Text="Actividad reciente" />
+                        <Border Style="{StaticResource Tarjeta}" Padding="0">
+                            <ListView ItemsSource="{x:Bind ViewModel.ActividadReciente, Mode=OneWay}" IsHitTestVisible="False">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="models:ActividadViewModel">
+                                        <Grid ColumnSpacing="8" Padding="8,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="1.2*" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="2.5*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{x:Bind Hora}" Style="{StaticResource CeldaFila}" />
+                                            <TextBlock Grid.Column="1" Text="{x:Bind Tipo}" Style="{StaticResource CeldaFila}" />
+                                            <TextBlock Grid.Column="2" Text="{x:Bind Archivo}" Style="{StaticResource CeldaFila}" />
+                                            <TextBlock Grid.Column="3" Text="{x:Bind IdPar}" Style="{StaticResource CeldaFila}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+
+                <!-- REGISTRO -->
+                <Grid x:Name="PanelRegistro" RowSpacing="12" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Spacing="4">
+                        <TextBlock Style="{StaticResource TituloSeccion}" Text="Registro del demonio" />
+                        <TextBlock
+                            Style="{StaticResource SubtituloSeccion}"
+                            Text="Log del perfil activo con perfil y par en cada línea. Filtra por par para ver solo su actividad." />
+                    </StackPanel>
+                    <Grid Grid.Row="1" ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="280" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock
+                            Grid.Column="0"
+                            VerticalAlignment="Center"
+                            Text="Mostrar par:" />
+                        <ComboBox
+                            Grid.Column="1"
+                            HorizontalAlignment="Stretch"
+                            ItemsSource="{x:Bind ViewModel.FiltrosParRegistro, Mode=OneWay}"
+                            SelectedItem="{x:Bind ViewModel.ParFiltroRegistroSeleccionado, Mode=TwoWay}" />
+                        <TextBlock
+                            Grid.Column="2"
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="Los mensajes globales del perfil (par: *) siempre se incluyen al filtrar."
+                            TextWrapping="WrapWholeWords" />
+                    </Grid>
+                    <Border Grid.Row="2" Style="{StaticResource Tarjeta}" Padding="12">
+                        <ScrollViewer x:Name="ScrollRegistro" VerticalScrollBarVisibility="Auto">
+                            <TextBlock
+                                x:Name="TextoRegistroBloque"
+                                FontFamily="Consolas"
+                                FontSize="12"
+                                IsTextSelectionEnabled="True"
+                                Text="{x:Bind ViewModel.TextoRegistro, Mode=OneWay}"
+                                TextWrapping="Wrap" />
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+
+                <!-- AJUSTES AVANZADOS (icono engranaje del NavigationView) -->
+                <ScrollViewer
+                    x:Name="PanelAjustes"
+                    VerticalScrollBarVisibility="Auto"
+                    Visibility="Collapsed">
+                    <StackPanel Spacing="16" MaxWidth="560">
+                        <StackPanel Spacing="4">
+                            <TextBlock Style="{StaticResource TituloSeccion}" Text="Ajustes avanzados" />
+                            <TextBlock
+                                Style="{StaticResource SubtituloSeccion}"
+                                Text="Parámetros del motor de sincronización. Requieren Guardar y reiniciar o Recargar el demonio." />
+                        </StackPanel>
+
+                        <Border Style="{StaticResource Tarjeta}">
+                            <StackPanel Spacing="14">
+                                <TextBlock Style="{StaticResource EtiquetaGrupo}" Margin="0,0,0,0" Text="Vigilancia" />
+                                <NumberBox Header="Polling de seguridad (segundos)" Minimum="30" Maximum="3600" SpinButtonPlacementMode="Inline"
+                                           Value="{x:Bind ViewModel.IntervaloPollingSegundos, Mode=TwoWay}"
+                                           IsEnabled="{x:Bind ViewModel.PuedeEditarConfig, Mode=OneWay}" />
+                                <NumberBox Header="Estabilidad del archivo (segundos)" Minimum="1" Maximum="30" SpinButtonPlacementMode="Inline"
+                                           Value="{x:Bind ViewModel.SegundosEstabilidadArchivo, Mode=TwoWay}"
+                                           IsEnabled="{x:Bind ViewModel.PuedeEditarConfig, Mode=OneWay}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Tarjeta}">
+                            <StackPanel Spacing="14">
+                                <TextBlock Style="{StaticResource EtiquetaGrupo}" Margin="0,0,0,0" Text="Rendimiento" />
+                                <NumberBox Header="Copiadores en paralelo" Minimum="1" Maximum="32" SpinButtonPlacementMode="Inline"
+                                           Value="{x:Bind ViewModel.NumCopiadoresParalelos, Mode=TwoWay}"
+                                           IsEnabled="{x:Bind ViewModel.PuedeEditarConfig, Mode=OneWay}" />
+                                <NumberBox Header="Hidratadores en paralelo" Minimum="1" Maximum="16" SpinButtonPlacementMode="Inline"
+                                           Value="{x:Bind ViewModel.NumHidratadoresParalelos, Mode=TwoWay}"
+                                           IsEnabled="{x:Bind ViewModel.PuedeEditarConfig, Mode=OneWay}" />
+                                <NumberBox Header="Timeout hidratación (segundos)" Minimum="30" Maximum="3600" SpinButtonPlacementMode="Inline"
+                                           Value="{x:Bind ViewModel.TimeoutHidratacionSegundos, Mode=TwoWay}"
+                                           IsEnabled="{x:Bind ViewModel.PuedeEditarConfig, Mode=OneWay}" />
+                                <NumberBox Header="Publicación de estado (ms)" Minimum="200" Maximum="5000" SpinButtonPlacementMode="Inline"
+                                           Value="{x:Bind ViewModel.IntervaloPublicacionEstadoMs, Mode=TwoWay}"
+                                           IsEnabled="{x:Bind ViewModel.PuedeEditarConfig, Mode=OneWay}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+            </Grid>
+        </Grid>
+    </NavigationView>
+</Page>

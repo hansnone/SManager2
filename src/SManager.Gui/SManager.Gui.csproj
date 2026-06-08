@@ -1,0 +1,121 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+
+
+  <PropertyGroup>
+
+    <OutputType>WinExe</OutputType>
+
+    <TargetFramework>net8.0-windows</TargetFramework>
+
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <Nullable>enable</Nullable>
+
+    <UseWindowsForms>true</UseWindowsForms>
+
+    <RootNamespace>SManager.Gui</RootNamespace>
+
+    <AssemblyName>SManager.Gui</AssemblyName>
+
+    <ApplicationIcon />
+
+    <StartupObject>SManager.Gui.Program</StartupObject>
+
+  </PropertyGroup>
+
+
+
+  <ItemGroup>
+
+    <ProjectReference Include="..\SManager.Core\SManager.Core.csproj" />
+
+    <ProjectReference Include="..\SManager.Ipc\SManager.Ipc.csproj" />
+
+    <ProjectReference Include="..\SManager.Gui.Shared\SManager.Gui.Shared.csproj" />
+
+    <ProjectReference Include="..\SManager.Cli\SManager.Cli.csproj" ReferenceOutputAssembly="false" />
+
+    <ProjectReference Include="..\SManager.Host\SManager.Host.csproj" ReferenceOutputAssembly="false" />
+
+  </ItemGroup>
+
+
+
+  <!-- Quita copias antiguas en la raíz de salida de la GUI. -->
+
+  <Target Name="LimpiarArtefactosObsoletosRaiz" AfterTargets="Build">
+
+    <ItemGroup>
+
+      <ArtefactosObsoletosRaiz Include="$(OutputPath)smanager.exe" />
+
+      <ArtefactosObsoletosRaiz Include="$(OutputPath)smanager.dll" />
+
+      <ArtefactosObsoletosRaiz Include="$(OutputPath)smanager.pdb" />
+
+      <ArtefactosObsoletosRaiz Include="$(OutputPath)smanager.deps.json" />
+
+      <ArtefactosObsoletosRaiz Include="$(OutputPath)smanager.runtimeconfig.json" />
+
+      <ArtefactosObsoletosRaiz Include="$(OutputPath)SManager.Host.exe" />
+
+      <ArtefactosObsoletosRaiz Include="$(OutputPath)SManager.Host.dll" />
+
+      <ArtefactosObsoletosRaiz Include="$(OutputPath)SManager.Host.pdb" />
+
+      <ArtefactosObsoletosRaiz Include="$(OutputPath)SManager.Host.deps.json" />
+
+      <ArtefactosObsoletosRaiz Include="$(OutputPath)SManager.Host.runtimeconfig.json" />
+
+    </ItemGroup>
+
+    <Delete Files="@(ArtefactosObsoletosRaiz)" ContinueOnError="true" />
+
+  </Target>
+
+
+
+  <!--
+
+    Release: empaqueta CLI+Host en herramientas\ para despliegue junto a la GUI.
+
+    Debug: NO copia (evita MSB3027 si el demonio está activo). La GUI/CLI usan
+
+    bin\Debug\net8.0\ de cada proyecto vía ResolvedorEjecutables.
+
+  -->
+
+  <Target Name="CopiarHerramientasSManager" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+
+    <PropertyGroup>
+
+      <CarpetaHerramientas>$(OutputPath)herramientas\</CarpetaHerramientas>
+
+      <CarpetaSalidaCli>$(MSBuildThisFileDirectory)..\SManager.Cli\bin\$(Configuration)\net8.0\</CarpetaSalidaCli>
+
+      <CarpetaSalidaHost>$(MSBuildThisFileDirectory)..\SManager.Host\bin\$(Configuration)\net8.0\</CarpetaSalidaHost>
+
+    </PropertyGroup>
+
+    <MakeDir Directories="$(CarpetaHerramientas)" />
+
+    <ItemGroup>
+
+      <ArchivosCli Include="$(CarpetaSalidaCli)**\*.*" Condition="Exists('$(CarpetaSalidaCli)')" />
+
+      <ArchivosHost Include="$(CarpetaSalidaHost)**\*.*" Condition="Exists('$(CarpetaSalidaHost)')" />
+
+    </ItemGroup>
+
+    <Copy SourceFiles="@(ArchivosCli)" DestinationFolder="$(CarpetaHerramientas)" SkipUnchangedFiles="true" Condition="'@(ArchivosCli)' != ''" />
+
+    <Copy SourceFiles="@(ArchivosHost)" DestinationFolder="$(CarpetaHerramientas)" SkipUnchangedFiles="true" Condition="'@(ArchivosHost)' != ''" />
+
+  </Target>
+
+
+
+</Project>
+
+

@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SManager.Cli/SManager.Cli.csproj" />
+    <Project Path="src/SManager.Core/SManager.Core.csproj" />
+    <Project Path="src/SManager.Gui.Shared/SManager.Gui.Shared.csproj" />
+    <Project Path="src/SManager.Gui.WinUI/SManager.Gui.WinUI.csproj" />
+    <Project Path="src/SManager.Gui/SManager.Gui.csproj" />
+    <Project Path="src/SManager.Host/SManager.Host.csproj" />
+    <Project Path="src/SManager.Ipc/SManager.Ipc.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SManager.Core.Tests/SManager.Core.Tests.csproj" />
+  </Folder>
+</Solution>

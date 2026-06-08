@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "intervalo_polling_segundos": 180,
+  "segundos_estabilidad_archivo": 3,
+  "num_copiadores_paralelos": 4,
+  "num_hidratadores_paralelos": 3,
+  "timeout_hidratacion_segundos": 300,
+  "intervalo_publicacion_estado_ms": 500,
+  "pares": [
+    {
+      "id_par": "ejemplo-local",
+      "nombre": "Origen → Destino",
+      "habilitado": true,
+      "pausado": false,
+      "ruta_origen": "C:\\origen",
+      "ruta_destino": "C:\\destino",
+      "filtro_inclusion": "*;*.exr",
+      "filtro_exclusion": "~$*;*.tmp;*.partial;*.lnk"
+    }
+  ]
+}
