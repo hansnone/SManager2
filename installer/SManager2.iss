@@ -37,6 +37,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.19041
 UninstallDisplayIcon={app}\SManager.Gui.WinUI.exe
 SetupLogging=yes
+ChangesEnvironment=yes
 ; Sin privilegios de administrador: instalación solo para el usuario actual.
 ; Los datos (config, logs, estado IPC) permanecen en %LOCALAPPDATA%\SManager2.
 
@@ -70,16 +71,8 @@ Filename: "{app}\SManager.Gui.WinUI.exe"; Description: "Abrir SManager 2.0"; Fla
 const
   ClaveEntornoUsuario = 'Environment';
 
-// Notifica a Windows (y terminales nuevos) que cambió el PATH del usuario.
-procedure NotificarCambioEntorno;
-var
-  ResultadoMensaje: Longint;
-begin
-  SendMessageTimeout(HWND_BROADCAST, WM_SETTINGCHANGE, 0,
-    Longint(PChar('Environment')), SMTO_ABORTIFHUNG, 5000, ResultadoMensaje);
-end;
-
 // Evita duplicar la carpeta herramientas\ en PATH al reinstalar o actualizar.
+// ChangesEnvironment=yes en [Setup] notifica a Windows del cambio de PATH al finalizar.
 function NecesitaAnadirAlPath(const Directorio: String): Boolean;
 var
   RutasActuales: String;
@@ -179,7 +172,6 @@ begin
   begin
     CarpetaHerramientas := ExpandConstant('{app}\herramientas');
     AnadirAlPathUsuario(CarpetaHerramientas);
-    NotificarCambioEntorno;
   end;
 end;
 
@@ -190,7 +182,6 @@ begin
     DetenerDemoniosSManager;
     RegDeleteValue(HKEY_CURRENT_USER, 'Software\Microsoft\Windows\CurrentVersion\Run', 'SManager2');
     QuitarDelPathUsuario(ExpandConstant('{app}\herramientas'));
-    NotificarCambioEntorno;
   end;
 end;
 

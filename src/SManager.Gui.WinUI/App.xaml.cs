@@ -1,5 +1,6 @@
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using SManager.Gui.WinUI.Servicios;
 using SManager.Ipc;
 
 namespace SManager.Gui.WinUI;
@@ -15,6 +16,13 @@ public partial class App : Application
 
     public App()
     {
+        // Evita varias GUIs compitiendo por configuracion.json, IPC y comandos al demonio.
+        if (!ServicioInstanciaUnica.IntentarAdquirirInstanciaUnica())
+        {
+            Environment.Exit(0);
+            return;
+        }
+
         InitializeComponent();
         UnhandledException += App_UnhandledException;
     }
