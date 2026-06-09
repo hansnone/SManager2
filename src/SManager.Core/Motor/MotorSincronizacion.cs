@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using SManager.Core.Configuracion;
 using SManager.Core.Logging;
 using SManager.Core.Modelos;
+using SManager.Core.Utilidades;
 using SManager.Core.Vigia;
 using SManager.Core.Workers;
 using SManager.Ipc;
@@ -57,7 +58,8 @@ public sealed class MotorSincronizacion : IAsyncDisposable
         }
 
         var rutaActiva = RutasDatos.ObtenerRutaConfiguracionActiva(_opciones.NombrePerfil);
-        await Task.Run(() => File.Copy(_opciones.RutaConfiguracion, rutaActiva, overwrite: true), cancelacionExterna)
+        await CopiaArchivoConReintentos
+            .CopiarAsync(_opciones.RutaConfiguracion, rutaActiva, cancelacion: cancelacionExterna)
             .ConfigureAwait(false);
 
         _estado = new EstadoMotor
@@ -170,36 +172,33 @@ public sealed class MotorSincronizacion : IAsyncDisposable
         {
             while (!cancelacion.IsCancellationRequested)
             {
-                // Prioridad: atender APAGAR/RECARGAR antes de trabajo pesado del ciclo.
-                var comando = await _ipc.LeerComandoPendienteAsync(_opciones.NombrePerfil, cancelacion)
-                    .ConfigureAwait(false);
-
-                if (comando == ComandoControl.Apagar)
+                try
                 {
-                    await _ipc.LimpiarComandoAsync(_opciones.NombrePerfil, cancelacion).ConfigureAwait(false);
-                    _logger.LogInformation("Señal APAGAR recibida para perfil {Perfil}", _opciones.NombrePerfil);
-                    SolicitarApagadoInmediato();
+                    var continuar = await EjecutarIteracionBucleAsync(cancelacion, intervaloMs).ConfigureAwait(false);
+                    if (!continuar)
+                    {
+                        break;
+                    }
+                }
+                catch (OperationCanceledException) when (cancelacion.IsCancellationRequested)
+                {
                     break;
                 }
-
-                if (comando == ComandoControl.Recargar)
+                catch (Exception ex)
                 {
-                    await _ipc.LimpiarComandoAsync(_opciones.NombrePerfil, cancelacion).ConfigureAwait(false);
-                    _recargaPendienteDesde = DateTime.UtcNow.AddSeconds(-10);
-                    await ProcesarRecargaPendienteAsync(cancelacion).ConfigureAwait(false);
+                    _logger.LogError(ex, "Error en iteración del bucle principal (perfil {Perfil})", _opciones.NombrePerfil);
+                    _estado?.EncolarLog("__ALL__", "ERROR",
+                        $"Error grave en bucle principal: {ex.Message}. El demonio sigue activo.");
+
+                    try
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(2), cancelacion).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
                 }
-
-                DrenarLineasLogAlDisco();
-                DetectarCambioConfig();
-                await ProcesarRecargaPendienteAsync(cancelacion).ConfigureAwait(false);
-                ProcesarEstadisticas();
-                ProcesarPollingSeguridad();
-
-                _estado.DrenarActividadAlHistorial();
-                var estadoIpc = ConstruirEstadoIpc();
-                await _ipc.PublicarEstadoAsync(estadoIpc, cancelacion).ConfigureAwait(false);
-
-                await Task.Delay(intervaloMs, cancelacion).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
@@ -220,6 +219,47 @@ public sealed class MotorSincronizacion : IAsyncDisposable
             _ipc.EliminarPid(_opciones.NombrePerfil);
             await _ipc.LimpiarComandoAsync(_opciones.NombrePerfil, CancellationToken.None).ConfigureAwait(false);
         }
+    }
+
+    /// <returns>false si el bucle debe terminar (p. ej. comando APAGAR).</returns>
+    private async Task<bool> EjecutarIteracionBucleAsync(CancellationToken cancelacion, int intervaloMs)
+    {
+        if (_estado is null)
+        {
+            return true;
+        }
+
+        // Prioridad: atender APAGAR/RECARGAR antes de trabajo pesado del ciclo.
+        var comando = await _ipc.LeerComandoPendienteAsync(_opciones.NombrePerfil, cancelacion)
+            .ConfigureAwait(false);
+
+        if (comando == ComandoControl.Apagar)
+        {
+            await _ipc.LimpiarComandoAsync(_opciones.NombrePerfil, cancelacion).ConfigureAwait(false);
+            _logger.LogInformation("Señal APAGAR recibida para perfil {Perfil}", _opciones.NombrePerfil);
+            SolicitarApagadoInmediato();
+            return false;
+        }
+
+        if (comando == ComandoControl.Recargar)
+        {
+            await _ipc.LimpiarComandoAsync(_opciones.NombrePerfil, cancelacion).ConfigureAwait(false);
+            _recargaPendienteDesde = DateTime.UtcNow.AddSeconds(-10);
+            await ProcesarRecargaPendienteAsync(cancelacion).ConfigureAwait(false);
+        }
+
+        DrenarLineasLogAlDisco();
+        DetectarCambioConfig();
+        await ProcesarRecargaPendienteAsync(cancelacion).ConfigureAwait(false);
+        ProcesarEstadisticas();
+        ProcesarPollingSeguridad();
+
+        _estado.DrenarActividadAlHistorial();
+        var estadoIpc = ConstruirEstadoIpc();
+        await _ipc.PublicarEstadoAsync(estadoIpc, cancelacion).ConfigureAwait(false);
+
+        await Task.Delay(intervaloMs, cancelacion).ConfigureAwait(false);
+        return true;
     }
 
     private void SolicitarApagadoInmediato()
@@ -376,7 +416,8 @@ public sealed class MotorSincronizacion : IAsyncDisposable
 
             // Mantener copia espejo que usa el demonio al arrancar.
             var rutaActiva = RutasDatos.ObtenerRutaConfiguracionActiva(_opciones.NombrePerfil);
-            await Task.Run(() => File.Copy(_opciones.RutaConfiguracion, rutaActiva, overwrite: true), cancelacion)
+            await CopiaArchivoConReintentos
+                .CopiarAsync(_opciones.RutaConfiguracion, rutaActiva, cancelacion: cancelacion)
                 .ConfigureAwait(false);
 
             // Filtros o rutas pueden haber cambiado: forzar escaneo en todos los pares activos.

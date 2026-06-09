@@ -49,6 +49,10 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Crear acceso directo en el escritorio"; GroupDescription: "Accesos directos:"; Flags: unchecked
+Name: "autostart"; Description: "Iniciar SManager 2.0 al iniciar Windows (minimizado)"; GroupDescription: "Opciones adicionales:"; Flags: unchecked
+
+[Registry]
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "SManager2"; ValueData: """{app}\SManager.Gui.WinUI.exe"" -minimized"; Tasks: autostart
 
 [Files]
 ; Todo el publish self-contained (GUI + herramientas\ con CLI y Host).
@@ -63,6 +67,62 @@ Name: "{autodesktop}\SManager 2.0"; Filename: "{app}\SManager.Gui.WinUI.exe"; Wo
 Filename: "{app}\SManager.Gui.WinUI.exe"; Description: "Abrir SManager 2.0"; Flags: nowait postinstall skipifsilent
 
 [Code]
+const
+  ClaveEntornoUsuario = 'Environment';
+
+// Notifica a Windows (y terminales nuevos) que cambió el PATH del usuario.
+procedure NotificarCambioEntorno;
+var
+  ResultadoMensaje: Longint;
+begin
+  SendMessageTimeout(HWND_BROADCAST, WM_SETTINGCHANGE, 0,
+    Longint(PChar('Environment')), SMTO_ABORTIFHUNG, 5000, ResultadoMensaje);
+end;
+
+// Evita duplicar la carpeta herramientas\ en PATH al reinstalar o actualizar.
+function NecesitaAnadirAlPath(const Directorio: String): Boolean;
+var
+  RutasActuales: String;
+begin
+  if not RegQueryStringValue(HKEY_CURRENT_USER, ClaveEntornoUsuario, 'Path', RutasActuales) then
+  begin
+    Result := True;
+    Exit;
+  end;
+  Result := Pos(';' + Uppercase(Directorio) + ';', ';' + Uppercase(RutasActuales) + ';') = 0;
+end;
+
+procedure AnadirAlPathUsuario(const Directorio: String);
+var
+  RutasActuales: String;
+begin
+  if not NecesitaAnadirAlPath(Directorio) then
+    Exit;
+
+  if RegQueryStringValue(HKEY_CURRENT_USER, ClaveEntornoUsuario, 'Path', RutasActuales) then
+    RegWriteExpandStringValue(HKEY_CURRENT_USER, ClaveEntornoUsuario, 'Path', RutasActuales + ';' + Directorio)
+  else
+    RegWriteExpandStringValue(HKEY_CURRENT_USER, ClaveEntornoUsuario, 'Path', Directorio);
+end;
+
+procedure QuitarDelPathUsuario(const Directorio: String);
+var
+  RutasActuales, RutasNormalizadas: String;
+begin
+  if not RegQueryStringValue(HKEY_CURRENT_USER, ClaveEntornoUsuario, 'Path', RutasActuales) then
+    Exit;
+
+  RutasNormalizadas := ';' + RutasActuales + ';';
+  StringChangeEx(RutasNormalizadas, ';' + Directorio + ';', ';', True);
+
+  if Length(RutasNormalizadas) > 1 then
+    Delete(RutasNormalizadas, 1, 1);
+  if Length(RutasNormalizadas) > 1 then
+    Delete(RutasNormalizadas, Length(RutasNormalizadas), 1);
+
+  RegWriteExpandStringValue(HKEY_CURRENT_USER, ClaveEntornoUsuario, 'Path', RutasNormalizadas);
+end;
+
 // Detiene demonios activos antes de desinstalar (apagado ordenado + cierre forzado de respaldo).
 procedure DetenerDemoniosSManager;
 var
@@ -70,6 +130,9 @@ var
   CodigoSalida: Integer;
   Busqueda: TFindRec;
 begin
+  // Durante upgrade la GUI puede bloquear el .exe; cerrarla antes de copiar ficheros.
+  Exec('taskkill.exe', '/IM SManager.Gui.WinUI.exe /F', '', SW_HIDE, ewWaitUntilTerminated, CodigoSalida);
+
   RutaSmanager := ExpandConstant('{app}\herramientas\smanager.exe');
   if not FileExists(RutaSmanager) then
     Exit;
@@ -103,10 +166,32 @@ begin
   Exec('taskkill.exe', '/IM SManager.Host.exe /F', '', SW_HIDE, ewWaitUntilTerminated, CodigoSalida);
 end;
 
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  CarpetaHerramientas: String;
+begin
+  // Actualización encima de instalación anterior: detener procesos antes de sobrescribir.
+  if CurStep = ssInstall then
+    DetenerDemoniosSManager;
+
+  // Tras copiar ficheros: exponer smanager.exe en PATH (solo HKCU, sin admin).
+  if CurStep = ssPostInstall then
+  begin
+    CarpetaHerramientas := ExpandConstant('{app}\herramientas');
+    AnadirAlPathUsuario(CarpetaHerramientas);
+    NotificarCambioEntorno;
+  end;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usUninstall then
+  begin
     DetenerDemoniosSManager;
+    RegDeleteValue(HKEY_CURRENT_USER, 'Software\Microsoft\Windows\CurrentVersion\Run', 'SManager2');
+    QuitarDelPathUsuario(ExpandConstant('{app}\herramientas'));
+    NotificarCambioEntorno;
+  end;
 end;
 
 [UninstallDelete]

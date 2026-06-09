@@ -151,6 +151,14 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private int _intervaloPublicacionEstadoMs = 500;
 
+    [ObservableProperty]
+    private bool _autoInicioHabilitado;
+
+    [ObservableProperty]
+    private bool _autoInicioMinimizado = true;
+
+    private bool _cargandoPreferenciasAutoInicio;
+
     public MainPageViewModel()
     {
         Pares.CollectionChanged += Pares_CollectionChanged;
@@ -200,6 +208,7 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
 
         CargarListaPerfiles();
         CargarConfiguracionPerfilActual();
+        CargarPreferenciasAutoInicio();
         ActualizarEstadoBotones();
         ReiniciarRegistroPerfil();
         _temporizador.Start();
@@ -241,6 +250,82 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
     partial void OnTimeoutHidratacionSegundosChanged(int value) => MarcarComoSucio();
 
     partial void OnIntervaloPublicacionEstadoMsChanged(int value) => MarcarComoSucio();
+
+    partial void OnAutoInicioHabilitadoChanged(bool value)
+    {
+        if (_cargandoPreferenciasAutoInicio)
+        {
+            return;
+        }
+
+        PersistirPreferenciasAutoInicio();
+    }
+
+    partial void OnAutoInicioMinimizadoChanged(bool value)
+    {
+        if (_cargandoPreferenciasAutoInicio)
+        {
+            return;
+        }
+
+        PersistirPreferenciasAutoInicio();
+    }
+
+    private void CargarPreferenciasAutoInicio()
+    {
+        _cargandoPreferenciasAutoInicio = true;
+        try
+        {
+            var preferencias = ServicioPreferenciasGui.Cargar();
+            var registro = ServicioAutoInicioSistema.LeerEstado();
+            var archivoExiste = File.Exists(
+                Path.Combine(RutasDatos.ResolverRaiz(), "preferencias_gui.json"));
+
+            if (!archivoExiste && registro.Habilitado)
+            {
+                // Instalador marcó autostart: reflejar en la GUI sin fichero previo.
+                AutoInicioHabilitado = true;
+                AutoInicioMinimizado = registro.Minimizado;
+                ServicioPreferenciasGui.Guardar(new PreferenciasGuiDto
+                {
+                    AutoInicioHabilitado = AutoInicioHabilitado,
+                    AutoInicioMinimizado = AutoInicioMinimizado
+                });
+                return;
+            }
+
+            AutoInicioHabilitado = preferencias.AutoInicioHabilitado;
+            AutoInicioMinimizado = preferencias.AutoInicioMinimizado;
+
+            if (AutoInicioHabilitado != registro.Habilitado
+                || (AutoInicioHabilitado && AutoInicioMinimizado != registro.Minimizado))
+            {
+                ServicioAutoInicioSistema.Aplicar(AutoInicioHabilitado, AutoInicioMinimizado);
+            }
+        }
+        finally
+        {
+            _cargandoPreferenciasAutoInicio = false;
+        }
+    }
+
+    private void PersistirPreferenciasAutoInicio()
+    {
+        ServicioPreferenciasGui.Guardar(new PreferenciasGuiDto
+        {
+            AutoInicioHabilitado = AutoInicioHabilitado,
+            AutoInicioMinimizado = AutoInicioMinimizado
+        });
+
+        try
+        {
+            ServicioAutoInicioSistema.Aplicar(AutoInicioHabilitado, AutoInicioMinimizado);
+        }
+        catch (Exception ex)
+        {
+            TextoEstado = $"No se pudo actualizar el auto-arranque: {ex.Message}";
+        }
+    }
 
     /// <summary>Carga el perfil ya seleccionado en el ComboBox (sin leer la UI del perfil anterior).</summary>
     [RelayCommand]

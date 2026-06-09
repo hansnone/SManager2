@@ -178,7 +178,8 @@ public static class ContenidoGuiaApp
         {
             Titulo = "14. Línea de comandos (smanager)",
             Cuerpo =
-                "Ubicación tras instalar: carpeta herramientas junto a la GUI.\n\n"
+                "Ubicación: %LOCALAPPDATA%\\Programs\\SManager2\\herramientas\\smanager.exe\n"
+                + "El instalador añade esa carpeta al PATH del usuario. Tras instalar, abre una terminal nueva.\n\n"
                 + "Comandos principales:\n"
                 + "smanager start [-perfil X] [-configpath ruta.json]\n"
                 + "smanager stop [-perfil X]\n"

@@ -1,3 +1,4 @@
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using SManager.Ipc;
 
@@ -50,5 +51,14 @@ public partial class App : Application
         };
         Window.AppWindow.Resize(new Windows.Graphics.SizeInt32(1280, 840));
         Window.Activate();
+
+        // Instalador o registro Run pueden pasar -minimized para abrir en la barra de tareas.
+        var iniciarMinimizado = Environment.GetCommandLineArgs()
+            .Any(argumento => string.Equals(argumento, "-minimized", StringComparison.OrdinalIgnoreCase));
+
+        if (iniciarMinimizado && Window.AppWindow.Presenter is OverlappedPresenter presentador)
+        {
+            presentador.Minimize();
+        }
     }
 }

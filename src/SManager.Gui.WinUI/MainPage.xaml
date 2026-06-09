@@ -1126,6 +1126,23 @@
 
                         <Border Style="{StaticResource Tarjeta}">
                             <StackPanel Spacing="14">
+                                <TextBlock Style="{StaticResource EtiquetaGrupo}" Text="Sistema" />
+                                <TextBlock
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="Registra SManager en el inicio de Windows (solo tu usuario, sin permisos de administrador)."
+                                    TextWrapping="WrapWholeWords" />
+                                <ToggleSwitch
+                                    Header="Iniciar SManager al encender Windows"
+                                    IsOn="{x:Bind ViewModel.AutoInicioHabilitado, Mode=TwoWay}" />
+                                <ToggleSwitch
+                                    Header="Abrir minimizado (icono en la barra de tareas)"
+                                    IsEnabled="{x:Bind ViewModel.AutoInicioHabilitado, Mode=OneWay}"
+                                    IsOn="{x:Bind ViewModel.AutoInicioMinimizado, Mode=TwoWay}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Tarjeta}">
+                            <StackPanel Spacing="14">
                                 <TextBlock Style="{StaticResource EtiquetaGrupo}" Margin="0,0,0,0" Text="Vigilancia" />
                                 <NumberBox Header="Polling de seguridad (segundos)" Minimum="30" Maximum="3600" SpinButtonPlacementMode="Inline"
                                            Value="{x:Bind ViewModel.IntervaloPollingSegundos, Mode=TwoWay}"

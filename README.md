@@ -41,7 +41,7 @@ La documentación completa de la interfaz está en la sección **Guía** dentro 
 
 ## Línea de comandos
 
-La CLI se instala junto a la GUI (`herramientas\smanager.exe`):
+La CLI se instala en `%LOCALAPPDATA%\Programs\SManager2\herramientas\`. El instalador añade esa carpeta al **PATH del usuario** (no requiere administrador). Abre una **terminal nueva** tras instalar para que PowerShell reconozca `smanager`.
 
 ```powershell
 smanager help
