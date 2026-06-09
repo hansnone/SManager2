@@ -116,47 +116,47 @@ begin
   RegWriteExpandStringValue(HKEY_CURRENT_USER, ClaveEntornoUsuario, 'Path', RutasNormalizadas);
 end;
 
-// Detiene demonios activos antes de desinstalar (apagado ordenado + cierre forzado de respaldo).
+// Apagado ordenado + cierre forzado antes de upgrades/desinstalación (evita .exe bloqueados).
 procedure DetenerDemoniosSManager;
 var
   RutaSmanager, CarpetaPerfiles, NombrePerfil: String;
   CodigoSalida: Integer;
   Busqueda: TFindRec;
 begin
-  // Durante upgrade la GUI puede bloquear el .exe; cerrarla antes de copiar ficheros.
-  Exec('taskkill.exe', '/IM SManager.Gui.WinUI.exe /F', '', SW_HIDE, ewWaitUntilTerminated, CodigoSalida);
-
   RutaSmanager := ExpandConstant('{app}\herramientas\smanager.exe');
-  if not FileExists(RutaSmanager) then
-    Exit;
 
-  CarpetaPerfiles := ExpandConstant('{localappdata}\SManager2\Perfiles');
-  if DirExists(CarpetaPerfiles) then
+  // Apagado limpio vía CLI si ya existe una instalación previa.
+  if FileExists(RutaSmanager) then
   begin
-    if FindFirst(CarpetaPerfiles + '\*', Busqueda) then
+    CarpetaPerfiles := ExpandConstant('{localappdata}\SManager2\Perfiles');
+    if DirExists(CarpetaPerfiles) then
     begin
-      try
-        repeat
-          if ((Busqueda.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0)
-             and (Busqueda.Name <> '.') and (Busqueda.Name <> '..') then
-          begin
-            NombrePerfil := Busqueda.Name;
-            Exec(RutaSmanager, 'stop -perfil "' + NombrePerfil + '"',
-              ExpandConstant('{app}\herramientas'), SW_HIDE, ewWaitUntilTerminated, CodigoSalida);
-          end;
-        until not FindNext(Busqueda);
-      finally
-        FindClose(Busqueda);
+      if FindFirst(CarpetaPerfiles + '\*', Busqueda) then
+      begin
+        try
+          repeat
+            if ((Busqueda.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0)
+               and (Busqueda.Name <> '.') and (Busqueda.Name <> '..') then
+            begin
+              NombrePerfil := Busqueda.Name;
+              Exec(RutaSmanager, 'stop -perfil "' + NombrePerfil + '"',
+                ExpandConstant('{app}\herramientas'), SW_HIDE, ewWaitUntilTerminated, CodigoSalida);
+            end;
+          until not FindNext(Busqueda);
+        finally
+          FindClose(Busqueda);
+        end;
       end;
     end;
+
+    Exec(RutaSmanager, 'stop -perfil General',
+      ExpandConstant('{app}\herramientas'), SW_HIDE, ewWaitUntilTerminated, CodigoSalida);
   end;
 
-  // Perfil por defecto por si no hubo carpeta Perfiles\ aún.
-  Exec(RutaSmanager, 'stop -perfil General',
-    ExpandConstant('{app}\herramientas'), SW_HIDE, ewWaitUntilTerminated, CodigoSalida);
-
-  // Respaldo: procesos huérfanos que no respondieron a APAGAR.
+  // Respaldo: matar procesos que sigan bloqueando DLLs o .exe durante la sobrescritura.
   Exec('taskkill.exe', '/IM SManager.Host.exe /F', '', SW_HIDE, ewWaitUntilTerminated, CodigoSalida);
+  Exec('taskkill.exe', '/IM SManager.Gui.WinUI.exe /F', '', SW_HIDE, ewWaitUntilTerminated, CodigoSalida);
+  Exec('taskkill.exe', '/IM smanager.exe /F', '', SW_HIDE, ewWaitUntilTerminated, CodigoSalida);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

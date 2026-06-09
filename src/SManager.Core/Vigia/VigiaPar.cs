@@ -154,6 +154,7 @@ public sealed class VigiaPar : IAsyncDisposable
         _vigilante = new FileSystemWatcher(par.RutaOrigen)
         {
             IncludeSubdirectories = true,
+            // 64 KB: límite seguro en Windows; reduce pérdida de eventos en copias masivas.
             InternalBufferSize = BufferFswBytes,
             NotifyFilter = NotifyFilters.LastWrite
                 | NotifyFilters.FileName
