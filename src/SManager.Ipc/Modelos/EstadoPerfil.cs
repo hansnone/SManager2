@@ -49,6 +49,12 @@ public sealed class EstadoPerfil
 
     [JsonPropertyName("actualizado_utc")]
     public string ActualizadoUtc { get; set; } = string.Empty;
+
+    [JsonPropertyName("inicio_sesion_utc")]
+    public string? InicioSesionUtc { get; set; }
+
+    [JsonPropertyName("recursos")]
+    public RecursosProceso? Recursos { get; set; }
 }
 
 public sealed class TotalesEstado
@@ -58,6 +64,9 @@ public sealed class TotalesEstado
 
     [JsonPropertyName("errores")]
     public int Errores { get; set; }
+
+    [JsonPropertyName("bytes_escritos")]
+    public long BytesEscritos { get; set; }
 }
 
 public sealed class ResumenPar
@@ -106,4 +115,26 @@ public sealed class CopiaEnCurso
 
     [JsonPropertyName("copiador")]
     public int Copiador { get; set; }
+
+    [JsonPropertyName("bytes_totales")]
+    public long BytesTotales { get; set; }
+
+    [JsonPropertyName("bytes_copiados")]
+    public long BytesCopiados { get; set; }
+
+    [JsonPropertyName("porcentaje")]
+    public int Porcentaje { get; set; }
+
+    [JsonPropertyName("eta_segundos")]
+    public int? EtaSegundos { get; set; }
+}
+
+/// <summary>Consumo de RAM y CPU del proceso demonio en el instante de publicación.</summary>
+public sealed class RecursosProceso
+{
+    [JsonPropertyName("memoria_trabajo_bytes")]
+    public long MemoriaTrabajoBytes { get; set; }
+
+    [JsonPropertyName("cpu_porcentaje")]
+    public double CpuPorcentaje { get; set; }
 }

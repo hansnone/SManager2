@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -27,22 +28,62 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
     private string _rutaConfig = string.Empty;
     private long _posicionLog;
     private string _textoRegistroCrudo = string.Empty;
+    private int _indiceLineaCrudaProcesada;
+    private bool _suprimirMarcadoSucio;
+    private bool _omitirProximoCambioPerfil;
 
     /// <summary>La vista pide desplazarse al final del registro (carga inicial o líneas nuevas).</summary>
     public event EventHandler? RegistroDesplazarAlFinalSolicitado;
 
     public ObservableCollection<string> Perfiles { get; } = [];
     public ObservableCollection<string> FiltrosParRegistro { get; } = [];
+    public ObservableCollection<string> FiltrosNivelRegistro { get; } =
+    [
+        MapeadorNivelRegistro.EtiquetaTodosLosNiveles,
+        "INFO",
+        "WARN",
+        "ERROR",
+        "PENDIENTE"
+    ];
     public ObservableCollection<ParFilaViewModel> Pares { get; } = [];
+    public ObservableCollection<LineaRegistroViewModel> LineasRegistro { get; } = [];
     public ObservableCollection<MonitorParViewModel> MonitorPares { get; } = [];
     public ObservableCollection<CopiaEnCursoViewModel> CopiasEnCurso { get; } = [];
     public ObservableCollection<ActividadViewModel> ActividadReciente { get; } = [];
+
+    public EstadisticasPanelViewModel Estadisticas { get; } = new();
+
+    /// <summary>Apartados de la guía de referencia (sección Guía).</summary>
+    public IReadOnlyList<SeccionGuiaViewModel> SeccionesGuia { get; } = ContenidoGuiaApp.ObtenerSecciones();
 
     [ObservableProperty]
     private string _perfilSeleccionado = "General";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TextoRutaConfiguracionBarra))]
     private string _rutaConfiguracion = string.Empty;
+
+    /// <summary>True si la UI difiere del último guardado o carga desde disco.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TextoRutaConfiguracionBarra))]
+    private bool _hayCambiosSinGuardar;
+
+    /// <summary>Ruta JSON en la barra superior, con indicador visual si hay cambios pendientes.</summary>
+    public string TextoRutaConfiguracionBarra =>
+        HayCambiosSinGuardar
+            ? $"{RutaConfiguracion}  •  sin guardar"
+            : RutaConfiguracion;
+
+    /// <summary>Ubicación estándar del perfil en Perfiles configuracion.</summary>
+    [ObservableProperty]
+    private string _rutaConfiguracionPorDefecto = string.Empty;
+
+    /// <summary>True si el perfil usa un JSON fuera de la carpeta por defecto.</summary>
+    [ObservableProperty]
+    private bool _usaRutaConfigPersonalizada;
+
+    [ObservableProperty]
+    private string _textoModoRutaConfig = "Por defecto";
 
     [ObservableProperty]
     private string _textoEstado = "Detenido";
@@ -57,27 +98,40 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
     private string _textoPolling = string.Empty;
 
     [ObservableProperty]
-    private string _textoRegistro = string.Empty;
-
-    [ObservableProperty]
     private string _parFiltroRegistroSeleccionado = ServicioFiltradoRegistro.EtiquetaTodosLosPares;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(IniciarCommand))]
-    [NotifyCanExecuteChangedFor(nameof(DetenerCommand))]
-    [NotifyCanExecuteChangedFor(nameof(RecargarCommand))]
+    private string _nivelFiltroRegistroSeleccionado = MapeadorNivelRegistro.EtiquetaTodosLosNiveles;
+
+    [ObservableProperty]
+    private string _textoBusquedaRegistro = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
+    [NotifyCanExecuteChangedFor(nameof(NuevoPerfilCommand))]
+    [NotifyCanExecuteChangedFor(nameof(EliminarPerfilCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AnadirParCommand))]
+    [NotifyCanExecuteChangedFor(nameof(QuitarParCommand))]
+    [NotifyCanExecuteChangedFor(nameof(EditarParCommand))]
+    private bool _puedeEditarConfig = true;
+
+    /// <summary>Habilita Iniciar en XAML sin depender de CanExecute del RelayCommand (WinUI lo pisa).</summary>
+    [ObservableProperty]
+    private bool _puedeIniciar = true;
+
+    /// <summary>Habilita Detener/Recargar en XAML.</summary>
+    [ObservableProperty]
+    private bool _puedeDetener;
+
+    [ObservableProperty]
     private bool _demonioEnEjecucion;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(IniciarCommand))]
-    [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
-    [NotifyCanExecuteChangedFor(nameof(NuevoPerfilCommand))]
-    [NotifyCanExecuteChangedFor(nameof(AnadirParCommand))]
-    [NotifyCanExecuteChangedFor(nameof(QuitarParCommand))]
-    private bool _puedeEditarConfig = true;
-
-    [ObservableProperty]
     private ParFilaViewModel? _parSeleccionado;
+
+    /// <summary>True cuando no hay pares: la vista muestra estado vacío con CTA.</summary>
+    [ObservableProperty]
+    private bool _mostrarEstadoVacioPares = true;
 
     [ObservableProperty]
     private int _intervaloPollingSegundos = 180;
@@ -97,6 +151,43 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private int _intervaloPublicacionEstadoMs = 500;
 
+    public MainPageViewModel()
+    {
+        Pares.CollectionChanged += Pares_CollectionChanged;
+    }
+
+    private void Pares_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        ActualizarEstadoVacioPares();
+
+        if (e.NewItems is not null)
+        {
+            foreach (ParFilaViewModel par in e.NewItems)
+            {
+                SuscribirCambiosPar(par);
+            }
+        }
+
+        if (e.OldItems is not null)
+        {
+            foreach (ParFilaViewModel par in e.OldItems)
+            {
+                DesuscribirCambiosPar(par);
+            }
+        }
+
+        MarcarComoSucio();
+    }
+
+    private void SuscribirCambiosPar(ParFilaViewModel par) =>
+        par.PropertyChanged += Par_PropertyChanged;
+
+    private void DesuscribirCambiosPar(ParFilaViewModel par) =>
+        par.PropertyChanged -= Par_PropertyChanged;
+
+    private void Par_PropertyChanged(object? sender, PropertyChangedEventArgs e) =>
+        MarcarComoSucio();
+
     public void Inicializar()
     {
         // El temporizador depende del hilo UI; se crea aquí, no en el ctor (MainPage se construye muy pronto).
@@ -112,23 +203,237 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         ActualizarEstadoBotones();
         ReiniciarRegistroPerfil();
         _temporizador.Start();
+        _omitirProximoCambioPerfil = true;
     }
 
-    partial void OnParFiltroRegistroSeleccionadoChanged(string value) =>
-        ReaplicarFiltroRegistro(moverAlFinal: false);
-
-    [RelayCommand]
-    private void CambiarPerfil()
+    /// <summary>Evita recargar el perfil dos veces cuando el ComboBox dispara SelectionChanged al arrancar.</summary>
+    public bool ConsumirOmitirCambioPerfilInicial()
     {
-        LeerConfiguracionDesdeUi();
+        if (!_omitirProximoCambioPerfil)
+        {
+            return false;
+        }
+
+        _omitirProximoCambioPerfil = false;
+        return true;
+    }
+
+    private void ActualizarEstadoVacioPares() =>
+        MostrarEstadoVacioPares = Pares.Count == 0;
+
+    partial void OnParFiltroRegistroSeleccionadoChanged(string value) =>
+        ReconstruirRegistroFiltrado(moverAlFinal: false);
+
+    partial void OnNivelFiltroRegistroSeleccionadoChanged(string value) =>
+        ReconstruirRegistroFiltrado(moverAlFinal: false);
+
+    partial void OnTextoBusquedaRegistroChanged(string value) =>
+        ReconstruirRegistroFiltrado(moverAlFinal: false);
+
+    partial void OnIntervaloPollingSegundosChanged(int value) => MarcarComoSucio();
+
+    partial void OnSegundosEstabilidadArchivoChanged(int value) => MarcarComoSucio();
+
+    partial void OnNumCopiadoresParalelosChanged(int value) => MarcarComoSucio();
+
+    partial void OnNumHidratadoresParalelosChanged(int value) => MarcarComoSucio();
+
+    partial void OnTimeoutHidratacionSegundosChanged(int value) => MarcarComoSucio();
+
+    partial void OnIntervaloPublicacionEstadoMsChanged(int value) => MarcarComoSucio();
+
+    /// <summary>Carga el perfil ya seleccionado en el ComboBox (sin leer la UI del perfil anterior).</summary>
+    [RelayCommand]
+    private void AplicarCambioPerfil()
+    {
         CargarConfiguracionPerfilActual();
         ActualizarEstadoBotones();
         ReiniciarRegistroPerfil();
+        Estadisticas.ReiniciarMuestreo();
+        LimpiarVistaTelemetria();
+    }
+
+    /// <summary>
+    /// Pregunta qué hacer con cambios sin guardar antes de cambiar de perfil o cerrar la app.
+    /// </summary>
+    public async Task<DecisionCambiosPendientes> PreguntarCambiosSinGuardarAsync(string motivo)
+    {
+        if (!HayCambiosSinGuardar || !PuedeEditarConfig)
+        {
+            return DecisionCambiosPendientes.ContinuarSinGuardar;
+        }
+
+        var cuadro = new ContentDialog
+        {
+            Title = "Cambios sin guardar",
+            Content = new TextBlock
+            {
+                Text =
+                    $"Hay cambios en el perfil «{PerfilActual()}» que no se han guardado en disco.\n\n"
+                    + $"¿Qué deseas hacer al {motivo}?",
+                TextWrapping = TextWrapping.WrapWholeWords
+            },
+            PrimaryButtonText = "Guardar",
+            SecondaryButtonText = "Descartar",
+            CloseButtonText = "Cancelar",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = App.Window.Content.XamlRoot
+        };
+
+        var resultado = await cuadro.ShowAsync();
+        return resultado switch
+        {
+            ContentDialogResult.Primary => DecisionCambiosPendientes.GuardarYContinuar,
+            ContentDialogResult.Secondary => DecisionCambiosPendientes.ContinuarSinGuardar,
+            _ => DecisionCambiosPendientes.Cancelar
+        };
+    }
+
+    private void MarcarComoSucio()
+    {
+        if (_suprimirMarcadoSucio || !PuedeEditarConfig)
+        {
+            return;
+        }
+
+        HayCambiosSinGuardar = true;
+    }
+
+    private void MarcarComoGuardado()
+    {
+        _suprimirMarcadoSucio = true;
+        HayCambiosSinGuardar = false;
+        _suprimirMarcadoSucio = false;
+    }
+
+    /// <summary>Indica que los cambios en memoria se abandonan (p. ej. al cambiar de perfil sin guardar).</summary>
+    public void DescartarCambiosPendientes() => MarcarComoGuardado();
+
+    [RelayCommand(CanExecute = nameof(PuedeEditarConfig))]
+    private async Task EliminarPerfilAsync()
+    {
+        var perfil = PerfilActual();
+        if (_ipc.EstaDemonioEnEjecucion(perfil))
+        {
+            await MostrarAvisoAsync("Detén el demonio antes de eliminar este perfil.", "Demonio activo");
+            return;
+        }
+
+        // Evita que el temporizador de la UI recree carpetas IPC mientras confirmamos o borramos.
+        _temporizador?.Stop();
+
+        var usaPersonalizada = _servicioConfig.UsaRutaPersonalizada(perfil);
+        var rutaPersonalizada = usaPersonalizada
+            ? _servicioConfig.ResolverRutaConfiguracion(perfil)
+            : null;
+
+        var casillaBorrarJson = new CheckBox
+        {
+            Content = "También borrar el archivo JSON personalizado del disco",
+            IsEnabled = usaPersonalizada,
+            IsChecked = false,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+
+        var textoAviso = usaPersonalizada
+            ? $"Se eliminará el perfil «{perfil}» y sus datos en %LOCALAPPDATA%\\SManager2.\n\n"
+              + $"Por defecto se conserva el JSON en:\n{rutaPersonalizada}"
+            : $"Se eliminará el perfil «{perfil}» y sus datos en %LOCALAPPDATA%\\SManager2 "
+              + "(configuración, log, telemetría IPC).\n\n"
+              + "No se borran archivos ya copiados en destino.";
+
+        var cuadro = new ContentDialog
+        {
+            Title = "Eliminar perfil",
+            PrimaryButtonText = "Eliminar",
+            CloseButtonText = "Cancelar",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = App.Window.Content.XamlRoot,
+            Content = new StackPanel
+            {
+                Spacing = 4,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = textoAviso,
+                        TextWrapping = TextWrapping.WrapWholeWords
+                    },
+                    casillaBorrarJson
+                }
+            }
+        };
+
+        if (await cuadro.ShowAsync() != ContentDialogResult.Primary)
+        {
+            _temporizador?.Start();
+            return;
+        }
+
+        var resultado = ServicioEliminacionPerfil.Eliminar(
+            perfil,
+            _ipc,
+            eliminarJsonPersonalizado: casillaBorrarJson.IsChecked == true);
+
+        if (!resultado.Exito)
+        {
+            _temporizador?.Start();
+            await MostrarAvisoAsync(resultado.MensajeError ?? "No se pudo eliminar el perfil.", "Error");
+            return;
+        }
+
+        var resumen = resultado.ElementosEliminados.Count > 0
+            ? "Eliminado:\n• " + string.Join("\n• ", resultado.ElementosEliminados)
+            : "El perfil no tenía datos locales.";
+
+        if (resultado.Advertencias.Count > 0)
+        {
+            resumen += "\n\n" + string.Join("\n", resultado.Advertencias);
+        }
+
+        // Recargar lista sin el perfil borrado y luego cambiar selección.
+        var restantes = _servicioConfig.ListarPerfiles()
+            .Where(p => !p.Equals(perfil, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        CargarListaPerfiles(excluirPerfil: perfil);
+        PerfilSeleccionado = Perfiles.FirstOrDefault()
+            ?? restantes.FirstOrDefault()
+            ?? "General";
+        if (!Perfiles.Contains(PerfilSeleccionado))
+        {
+            Perfiles.Add(PerfilSeleccionado);
+        }
+
+        CargarConfiguracionPerfilActual();
+        ReiniciarRegistroPerfil();
+        Estadisticas.ReiniciarPresentacion();
+        LimpiarVistaTelemetria();
+        ActualizarEstadoBotones();
+        _temporizador?.Start();
+
+        await MostrarAvisoAsync(resumen, "Perfil eliminado");
     }
 
     [RelayCommand(CanExecute = nameof(PuedeEditarConfig))]
     private async Task NuevoPerfilAsync()
     {
+        var decision = await PreguntarCambiosSinGuardarAsync("crear otro perfil");
+        if (decision == DecisionCambiosPendientes.Cancelar)
+        {
+            return;
+        }
+
+        if (decision == DecisionCambiosPendientes.GuardarYContinuar)
+        {
+            await GuardarAsync();
+        }
+        else if (decision == DecisionCambiosPendientes.ContinuarSinGuardar)
+        {
+            DescartarCambiosPendientes();
+        }
+
         var cuadro = new ContentDialog
         {
             Title = "Nuevo perfil",
@@ -140,7 +445,6 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
 
         var caja = new TextBox
         {
-            Text = "General",
             PlaceholderText = "Nombre del perfil",
             Margin = new Thickness(0, 8, 0, 0)
         };
@@ -151,7 +455,7 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
             {
                 new TextBlock
                 {
-                    Text = "Se creará una carpeta en Perfiles configuracion:",
+                    Text = $"Se creará la configuración por defecto en:\n%LOCALAPPDATA%\\SManager2\\Perfiles configuracion\\<nombre>\\configuracion.json",
                     TextWrapping = TextWrapping.WrapWholeWords
                 },
                 caja
@@ -183,16 +487,31 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
     {
         LeerConfiguracionDesdeUi();
         _servicioConfig.Guardar(_rutaConfig, _configuracion);
+        MarcarComoGuardado();
         await MostrarAvisoAsync($"Configuración guardada en:\n{_rutaConfig}", "SManager 2.0");
     }
 
-    [RelayCommand(CanExecute = nameof(PuedeEditarConfig))]
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task IniciarAsync()
     {
+        if (!PuedeIniciar)
+        {
+            return;
+        }
+
         try
         {
             LeerConfiguracionDesdeUi();
             _servicioConfig.Guardar(_rutaConfig, _configuracion);
+            MarcarComoGuardado();
+
+            if (!Pares.Any(p => p.Habilitado))
+            {
+                await MostrarAvisoAsync(
+                    "Añade al menos un par activo (habilitado) antes de iniciar el demonio.",
+                    "Sin pares");
+                return;
+            }
 
             var errores = EvaluarRutas(out var ok);
             if (!ok)
@@ -201,8 +520,9 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
                 return;
             }
 
+            // La CLI resuelve la ruta (por defecto o personalizada) si no se pasa -ConfigPath.
             var (codigo, salida, error) = await _daemon.EjecutarAsync(
-                $"start -perfil \"{PerfilActual()}\" -configpath \"{_rutaConfig}\"");
+                $"start -perfil \"{PerfilActual()}\"");
 
             if (codigo != 0)
             {
@@ -211,7 +531,7 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
 
             _posicionLog = 0;
             _textoRegistroCrudo = string.Empty;
-            TextoRegistro = string.Empty;
+            LineasRegistro.Clear();
             CargarListaPerfiles();
         }
         finally
@@ -220,9 +540,17 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         }
     }
 
-    [RelayCommand(CanExecute = nameof(DemonioEnEjecucion))]
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task DetenerAsync()
     {
+        if (!PuedeDetener)
+        {
+            return;
+        }
+
+        PuedeDetener = false;
+        TextoEstado = "Deteniendo…";
+
         try
         {
             var (codigo, salida, error) = await _daemon.EjecutarAsync($"stop -perfil \"{PerfilActual()}\"");
@@ -234,12 +562,35 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         finally
         {
             await RefrescarEstadoDemonioEnUiAsync();
+            await EsperarLiberacionPidAsync();
         }
     }
 
-    [RelayCommand(CanExecute = nameof(DemonioEnEjecucion))]
+    /// <summary>Tras stop, el CLI puede tardar hasta ~90 s antes del cierre forzado.</summary>
+    private async Task EsperarLiberacionPidAsync()
+    {
+        for (var i = 0; i < 200; i++)
+        {
+            if (!_ipc.EstaDemonioEnEjecucion(PerfilActual()))
+            {
+                await RefrescarEstadoDemonioEnUiAsync();
+                return;
+            }
+
+            await Task.Delay(250);
+        }
+
+        await RefrescarEstadoDemonioEnUiAsync();
+    }
+
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task RecargarAsync()
     {
+        if (!PuedeDetener)
+        {
+            return;
+        }
+
         var (codigo, salida, error) = await _daemon.EjecutarAsync($"reload -perfil \"{PerfilActual()}\"");
         if (codigo != 0)
         {
@@ -251,25 +602,86 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand(CanExecute = nameof(PuedeEditarConfig))]
-    private void AnadirPar()
+    private async Task AnadirParAsync()
     {
-        var par = new ParFilaViewModel();
-        Pares.Add(par);
-        ParSeleccionado = par;
-        ActualizarFiltrosParRegistro();
-    }
-
-    [RelayCommand(CanExecute = nameof(PuedeEditarConfig))]
-    private void QuitarPar()
-    {
-        if (ParSeleccionado is null)
+        var nuevo = await ServicioDialogoPar.MostrarAsync(null, esEdicion: false);
+        if (nuevo is null)
         {
             return;
         }
 
-        Pares.Remove(ParSeleccionado);
-        ParSeleccionado = null;
+        Pares.Add(nuevo);
+        ParSeleccionado = nuevo;
         ActualizarFiltrosParRegistro();
+    }
+
+    [RelayCommand(CanExecute = nameof(PuedeEditarConfig))]
+    private async Task EditarParAsync(ParFilaViewModel? par)
+    {
+        if (par is null)
+        {
+            return;
+        }
+
+        var editado = await ServicioDialogoPar.MostrarAsync(par, esEdicion: true);
+        if (editado is null)
+        {
+            return;
+        }
+
+        CopiarDatosPar(editado, par);
+        ActualizarFiltrosParRegistro();
+    }
+
+    [RelayCommand(CanExecute = nameof(PuedeEditarConfig))]
+    private async Task QuitarParAsync(ParFilaViewModel? par)
+    {
+        var objetivo = par ?? ParSeleccionado;
+        if (objetivo is null)
+        {
+            return;
+        }
+
+        var etiquetaPar = string.IsNullOrWhiteSpace(objetivo.Nombre)
+            ? "el par seleccionado"
+            : $"«{objetivo.Nombre.Trim()}»";
+
+        var cuadro = new ContentDialog
+        {
+            Title = "Quitar par",
+            Content = new TextBlock
+            {
+                Text = $"¿Eliminar {etiquetaPar} de la configuración?\n\nDebes pulsar Guardar para persistir el cambio en disco.",
+                TextWrapping = TextWrapping.WrapWholeWords
+            },
+            PrimaryButtonText = "Eliminar",
+            CloseButtonText = "Cancelar",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = App.Window.Content.XamlRoot
+        };
+
+        if (await cuadro.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        Pares.Remove(objetivo);
+        if (ParSeleccionado == objetivo)
+        {
+            ParSeleccionado = null;
+        }
+        ActualizarFiltrosParRegistro();
+    }
+
+    private static void CopiarDatosPar(ParFilaViewModel origen, ParFilaViewModel destino)
+    {
+        destino.Nombre = origen.Nombre;
+        destino.RutaOrigen = origen.RutaOrigen;
+        destino.RutaDestino = origen.RutaDestino;
+        destino.FiltroInclusion = origen.FiltroInclusion;
+        destino.FiltroExclusion = origen.FiltroExclusion;
+        destino.Habilitado = origen.Habilitado;
+        destino.Pausado = origen.Pausado;
     }
 
     [RelayCommand]
@@ -281,15 +693,98 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
             "Validación");
     }
 
+    /// <summary>
+    /// Vacía log, telemetría IPC y paneles de registro/monitor/estadísticas del perfil activo.
+    /// Requiere demonio detenido para no competir con el escritor de log.
+    /// </summary>
+    [RelayCommand]
+    private async Task LimpiarDatosPerfilAsync()
+    {
+        var perfil = PerfilActual();
+        if (_ipc.EstaDemonioEnEjecucion(perfil))
+        {
+            await MostrarAvisoAsync(
+                "Detén el demonio antes de limpiar.\n\nCon el servicio en marcha el log sigue abierto y la telemetría se regenera al instante.",
+                "Demonio activo");
+            return;
+        }
+
+        var cuadro = new ContentDialog
+        {
+            Title = "Limpiar datos del perfil",
+            Content = new TextBlock
+            {
+                Text =
+                    $"Se vaciarán los datos derivados del perfil «{perfil}»:\n\n"
+                    + "• Archivo de log en disco\n"
+                    + "• Telemetría IPC (Monitor, actividad, estadísticas)\n"
+                    + "• Comandos pendientes (control.json)\n"
+                    + "• Contadores copiados/errores en la configuración del perfil\n\n"
+                    + "No se borran los pares ni los archivos ya copiados en destino.",
+                TextWrapping = TextWrapping.WrapWholeWords
+            },
+            PrimaryButtonText = "Limpiar",
+            CloseButtonText = "Cancelar",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = App.Window.Content.XamlRoot
+        };
+
+        if (await cuadro.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        var resultado = ServicioLimpiezaDatosPerfil.Limpiar(perfil);
+
+        foreach (var fila in Pares)
+        {
+            fila.TotalCopiados = 0;
+            fila.TotalErrores = 0;
+        }
+
+        LeerConfiguracionDesdeUi();
+        foreach (var par in _configuracion.Pares)
+        {
+            par.TotalCopiados = 0;
+            par.TotalErrores = 0;
+        }
+
+        _servicioConfig.Guardar(_rutaConfig, _configuracion);
+        MarcarComoGuardado();
+
+        ReiniciarRegistroPerfil();
+        Estadisticas.ReiniciarPresentacion();
+        LimpiarVistaTelemetria();
+
+        var resumen = resultado.ElementosLimpiados.Count > 0
+            ? "Eliminado o vaciado:\n• " + string.Join("\n• ", resultado.ElementosLimpiados)
+            : "No había archivos de telemetría ni log que limpiar.";
+
+        if (resultado.Errores.Count > 0)
+        {
+            resumen += "\n\nAdvertencias:\n• " + string.Join("\n• ", resultado.Errores);
+        }
+
+        resumen += "\n\nContadores del perfil reiniciados a cero.";
+
+        await MostrarAvisoAsync(
+            resumen,
+            resultado.Exito ? "Limpieza completada" : "Limpieza parcial");
+    }
+
     private string PerfilActual() =>
         string.IsNullOrWhiteSpace(PerfilSeleccionado) ? "General" : PerfilSeleccionado.Trim();
 
-    private void CargarListaPerfiles()
+    private void CargarListaPerfiles(string? excluirPerfil = null)
     {
         var actual = PerfilActual();
         Perfiles.Clear();
-        var lista = _servicioConfig.ListarPerfiles().ToList();
-        if (!lista.Contains(actual, StringComparer.OrdinalIgnoreCase))
+        var lista = _servicioConfig.ListarPerfiles()
+            .Where(p => excluirPerfil is null || !p.Equals(excluirPerfil, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (!lista.Contains(actual, StringComparer.OrdinalIgnoreCase)
+            && (excluirPerfil is null || !actual.Equals(excluirPerfil, StringComparison.OrdinalIgnoreCase)))
         {
             lista.Add(actual);
         }
@@ -300,11 +795,132 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         }
     }
 
+    [RelayCommand(CanExecute = nameof(PuedeEditarConfig))]
+    private async Task ElegirRutaConfigExistenteAsync()
+    {
+        if (DemonioEnEjecucion)
+        {
+            await MostrarAvisoAsync("Detén el demonio antes de cambiar la ubicación del JSON.", "Demonio activo");
+            return;
+        }
+
+        var elegida = await ServicioSelectorArchivoJson.ElegirArchivoExistenteAsync(_rutaConfig);
+        if (string.IsNullOrWhiteSpace(elegida))
+        {
+            return;
+        }
+
+        try
+        {
+            _servicioConfig.EstablecerRutaPersonalizada(PerfilActual(), elegida);
+            CargarConfiguracionPerfilActual();
+            await MostrarAvisoAsync($"El perfil usará:\n{elegida}", "Configuración personalizada");
+        }
+        catch (Exception ex)
+        {
+            await MostrarAvisoAsync(ex.Message, "No se pudo cambiar la ruta");
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(PuedeEditarConfig))]
+    private async Task CrearRutaConfigPersonalizadaAsync()
+    {
+        if (DemonioEnEjecucion)
+        {
+            await MostrarAvisoAsync("Detén el demonio antes de cambiar la ubicación del JSON.", "Demonio activo");
+            return;
+        }
+
+        var destino = await ServicioSelectorArchivoJson.ElegirRutaGuardadoAsync(_rutaConfig);
+        if (string.IsNullOrWhiteSpace(destino))
+        {
+            return;
+        }
+
+        try
+        {
+            LeerConfiguracionDesdeUi();
+            _servicioConfig.Guardar(destino, _configuracion);
+            _servicioConfig.EstablecerRutaPersonalizada(PerfilActual(), destino);
+            CargarConfiguracionPerfilActual();
+            await MostrarAvisoAsync($"Configuración guardada en:\n{destino}", "Ubicación personalizada");
+        }
+        catch (Exception ex)
+        {
+            await MostrarAvisoAsync(ex.Message, "No se pudo crear la configuración");
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(PuedeEditarConfig))]
+    private async Task RestablecerRutaConfigPorDefectoAsync()
+    {
+        if (DemonioEnEjecucion)
+        {
+            await MostrarAvisoAsync("Detén el demonio antes de cambiar la ubicación del JSON.", "Demonio activo");
+            return;
+        }
+
+        if (!UsaRutaConfigPersonalizada)
+        {
+            await MostrarAvisoAsync("Este perfil ya usa la ubicación por defecto.", "SManager 2.0");
+            return;
+        }
+
+        var cuadro = new ContentDialog
+        {
+            Title = "Restaurar ubicación por defecto",
+            Content = new TextBlock
+            {
+                Text =
+                    "El perfil volverá a leer y guardar en la carpeta estándar de Perfiles configuracion.\n\n"
+                    + "El archivo personalizado no se borra del disco.",
+                TextWrapping = TextWrapping.WrapWholeWords
+            },
+            PrimaryButtonText = "Restaurar",
+            CloseButtonText = "Cancelar",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = App.Window.Content.XamlRoot
+        };
+
+        if (await cuadro.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        try
+        {
+            _servicioConfig.RestablecerRutaPorDefecto(PerfilActual());
+            CargarConfiguracionPerfilActual();
+            await MostrarAvisoAsync($"Ubicación por defecto:\n{RutaConfiguracionPorDefecto}", "Restaurado");
+        }
+        catch (Exception ex)
+        {
+            await MostrarAvisoAsync(ex.Message, "No se pudo restaurar");
+        }
+    }
+
     private void CargarConfiguracionPerfilActual()
     {
+        _suprimirMarcadoSucio = true;
+        try
+        {
+            CargarConfiguracionPerfilActualInterno();
+            MarcarComoGuardado();
+        }
+        finally
+        {
+            _suprimirMarcadoSucio = false;
+        }
+    }
+
+    private void CargarConfiguracionPerfilActualInterno()
+    {
         var perfil = PerfilActual();
-        _rutaConfig = _servicioConfig.CrearPerfil(perfil);
+        _rutaConfig = _servicioConfig.AsegurarConfiguracionPerfil(perfil);
         RutaConfiguracion = _rutaConfig;
+        RutaConfiguracionPorDefecto = _servicioConfig.ObtenerRutaPorDefecto(perfil);
+        UsaRutaConfigPersonalizada = _servicioConfig.UsaRutaPersonalizada(perfil);
+        TextoModoRutaConfig = UsaRutaConfigPersonalizada ? "Modo: ubicación personalizada" : "Modo: ubicación por defecto";
         _configuracion = _servicioConfig.Cargar(_rutaConfig);
 
         Pares.Clear();
@@ -332,6 +948,17 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         TimeoutHidratacionSegundos = _configuracion.TimeoutHidratacionSegundos;
         IntervaloPublicacionEstadoMs = _configuracion.IntervaloPublicacionEstadoMs;
         ActualizarFiltrosParRegistro();
+        ActualizarEstadoVacioPares();
+    }
+
+    /// <summary>Vacía paneles que dependen de telemetría IPC en vivo.</summary>
+    private void LimpiarVistaTelemetria()
+    {
+        TextoResumen = "Demonio detenido — sin telemetría en vivo.";
+        TextoPolling = "—";
+        MonitorPares.Clear();
+        CopiasEnCurso.Clear();
+        ActividadReciente.Clear();
     }
 
     private void LeerConfiguracionDesdeUi()
@@ -379,15 +1006,17 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
 
     private void ActualizarEstadoBotones()
     {
-        DemonioEnEjecucion = _ipc.EstaDemonioEnEjecucion(PerfilActual());
-        PuedeEditarConfig = !DemonioEnEjecucion;
-        TextoEstado = DemonioEnEjecucion ? "Sincronizando" : "Detenido";
+        var enEjecucion = _ipc.EstaDemonioEnEjecucion(PerfilActual());
+        DemonioEnEjecucion = enEjecucion;
+        PuedeIniciar = !enEjecucion;
+        PuedeDetener = enEjecucion;
+        PuedeEditarConfig = !enEjecucion;
+        TextoEstado = enEjecucion ? "Sincronizando" : "Detenido";
         ColorEstado = new SolidColorBrush(
-            DemonioEnEjecucion
+            enEjecucion
                 ? Microsoft.UI.Colors.MediumSeaGreen
                 : Microsoft.UI.Colors.IndianRed);
         OnPropertyChanged(nameof(ColorEstado));
-        NotificarComandosAccion();
     }
 
     /// <summary>
@@ -413,25 +1042,15 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         return completado.Task;
     }
 
-    private void NotificarComandosAccion()
-    {
-        IniciarCommand.NotifyCanExecuteChanged();
-        DetenerCommand.NotifyCanExecuteChanged();
-        RecargarCommand.NotifyCanExecuteChanged();
-        GuardarCommand.NotifyCanExecuteChanged();
-        NuevoPerfilCommand.NotifyCanExecuteChanged();
-        AnadirParCommand.NotifyCanExecuteChanged();
-        QuitarParCommand.NotifyCanExecuteChanged();
-    }
-
     private async Task ActualizarVistaAsync()
     {
-        ActualizarEstadoBotones();
         var perfil = PerfilActual();
-        var estado = await _ipc.LeerEstadoAsync(perfil);
+        var estado = await _ipc.LeerEstadoAsync(perfil).ConfigureAwait(false);
 
         App.DispatcherQueue.TryEnqueue(() =>
         {
+            ActualizarEstadoBotones();
+
             if (estado is not null)
             {
                 TextoResumen =
@@ -440,40 +1059,100 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
                     ? $"Próximo polling: en {estado.ProximoPollingEnSegundos}s"
                     : "Próximo polling: —";
 
-                SincronizarColeccion(MonitorPares, estado.Pares.Select(p => new MonitorParViewModel
-                {
-                    Nombre = p.Nombre,
-                    Estado = p.Estado,
-                    Copiados = p.Copiados,
-                    Errores = p.Errores
-                }));
+                ServicioSincronizacionLista.SincronizarInPlace(
+                    MonitorPares,
+                    estado.Pares.Count,
+                    (indice, fila) =>
+                    {
+                        var par = estado.Pares[indice];
+                        fila.ActualizarDesde(par.Nombre, par.Estado, par.Copiados, par.Errores);
+                    },
+                    indice =>
+                    {
+                        var par = estado.Pares[indice];
+                        return MonitorParViewModel.Crear(par.Nombre, par.Estado, par.Copiados, par.Errores);
+                    });
 
-                SincronizarColeccion(CopiasEnCurso, estado.CopiasEnCurso.Select(c => new CopiaEnCursoViewModel
-                {
-                    Copiador = c.Copiador,
-                    Archivo = c.Archivo,
-                    IdPar = c.IdPar
-                }));
+                ServicioSincronizacionLista.SincronizarInPlace(
+                    CopiasEnCurso,
+                    estado.CopiasEnCurso.Count,
+                    (indice, fila) =>
+                    {
+                        var copia = estado.CopiasEnCurso[indice];
+                        fila.ActualizarDesde(
+                            copia.Copiador,
+                            copia.Archivo,
+                            copia.IdPar,
+                            copia.Porcentaje,
+                            copia.EtaSegundos,
+                            copia.BytesTotales);
+                    },
+                    indice =>
+                    {
+                        var copia = estado.CopiasEnCurso[indice];
+                        return CopiaEnCursoViewModel.Crear(
+                            copia.Copiador,
+                            copia.Archivo,
+                            copia.IdPar,
+                            copia.Porcentaje,
+                            copia.EtaSegundos,
+                            copia.BytesTotales);
+                    });
 
-                SincronizarColeccion(ActividadReciente, estado.ActividadReciente.Select(a => new ActividadViewModel
-                {
-                    Hora = a.Hora,
-                    Tipo = a.Tipo,
-                    Archivo = a.Archivo,
-                    IdPar = a.IdPar
-                }));
+                var mapaNombrePar = ConstruirMapaIdNombrePar();
+                var actividad = estado.ActividadReciente
+                    .Select(a => new ActividadViewModel
+                    {
+                        Hora = a.Hora,
+                        Tipo = a.Tipo,
+                        Archivo = a.Archivo,
+                        IdPar = a.IdPar,
+                        NombrePar = mapaNombrePar.TryGetValue(a.IdPar, out var nombre)
+                            ? nombre
+                            : a.IdPar
+                    })
+                    .ToList();
+
+                ServicioSincronizacionLista.SincronizarHistorial(
+                    ActividadReciente,
+                    actividad,
+                    static (a, b) =>
+                        a.Hora == b.Hora
+                        && a.Tipo == b.Tipo
+                        && a.Archivo == b.Archivo
+                        && a.IdPar == b.IdPar
+                        && a.NombrePar == b.NombrePar);
+            }
+            else
+            {
+                LimpiarVistaTelemetria();
             }
 
             // El log se lee del disco aunque el demonio esté detenido.
             ActualizarRegistro(perfil);
+            Estadisticas.ActualizarDesdeEstado(estado, ObtenerTamanoLogBytes(perfil), perfil);
         });
+    }
+
+    private static long ObtenerTamanoLogBytes(string perfil)
+    {
+        try
+        {
+            var ruta = RutasDatos.ResolverRutaLog(perfil);
+            return File.Exists(ruta) ? new FileInfo(ruta).Length : 0;
+        }
+        catch
+        {
+            return 0;
+        }
     }
 
     private void ReiniciarRegistroPerfil()
     {
         _posicionLog = 0;
         _textoRegistroCrudo = string.Empty;
-        TextoRegistro = string.Empty;
+        _indiceLineaCrudaProcesada = 0;
+        LineasRegistro.Clear();
         ActualizarFiltrosParRegistro();
         ActualizarRegistro(PerfilActual(), moverAlFinal: true);
     }
@@ -501,14 +1180,33 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
     private Dictionary<string, string> ConstruirMapaIdNombrePar() =>
         Pares.ToDictionary(p => p.IdPar, p => p.Nombre, StringComparer.OrdinalIgnoreCase);
 
-    private void ReaplicarFiltroRegistro(bool moverAlFinal)
+    private void ReconstruirRegistroFiltrado(bool moverAlFinal)
     {
-        TextoRegistro = ServicioFiltradoRegistro.Filtrar(
-            _textoRegistroCrudo,
-            ParFiltroRegistroSeleccionado,
-            ConstruirMapaIdNombrePar());
+        LineasRegistro.Clear();
+        _indiceLineaCrudaProcesada = 0;
+        AnexarLineasRegistroVisibles(moverAlFinal);
+    }
 
-        if (moverAlFinal)
+    private void AnexarLineasRegistroVisibles(bool moverAlFinal)
+    {
+        var lineasCrudas = ServicioAnalisisRegistro.DividirLineasCrudas(_textoRegistroCrudo);
+        if (_indiceLineaCrudaProcesada >= lineasCrudas.Length)
+        {
+            return;
+        }
+
+        var anexadas = ServicioAnalisisRegistro.AnexarLineasFiltradas(
+            lineasCrudas,
+            _indiceLineaCrudaProcesada,
+            ParFiltroRegistroSeleccionado,
+            NivelFiltroRegistroSeleccionado,
+            TextoBusquedaRegistro,
+            ConstruirMapaIdNombrePar(),
+            LineasRegistro);
+
+        _indiceLineaCrudaProcesada = lineasCrudas.Length;
+
+        if (moverAlFinal && anexadas > 0)
         {
             RegistroDesplazarAlFinalSolicitado?.Invoke(this, EventArgs.Empty);
         }
@@ -516,7 +1214,7 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
 
     private void ActualizarRegistro(string perfil, bool moverAlFinal = false)
     {
-        var rutaLog = RutasDatos.ObtenerRutaLog(perfil);
+        var rutaLog = RutasDatos.ResolverRutaLog(perfil);
         if (!File.Exists(rutaLog))
         {
             return;
@@ -529,6 +1227,8 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
             {
                 _posicionLog = 0;
                 _textoRegistroCrudo = string.Empty;
+                _indiceLineaCrudaProcesada = 0;
+                LineasRegistro.Clear();
             }
 
             flujo.Seek(_posicionLog, SeekOrigin.Begin);
@@ -547,25 +1247,20 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
                 if (_textoRegistroCrudo.Length > 200_000)
                 {
                     _textoRegistroCrudo = _textoRegistroCrudo[^100_000..];
+                    ReconstruirRegistroFiltrado(moverAlFinal: true);
+                    return;
                 }
 
-                moverAlFinal = true;
+                AnexarLineasRegistroVisibles(moverAlFinal: true);
             }
-
-            ReaplicarFiltroRegistro(moverAlFinal);
+            else if (moverAlFinal && LineasRegistro.Count > 0)
+            {
+                RegistroDesplazarAlFinalSolicitado?.Invoke(this, EventArgs.Empty);
+            }
         }
         catch
         {
             // No bloquear la UI por el log.
-        }
-    }
-
-    private static void SincronizarColeccion<T>(ObservableCollection<T> destino, IEnumerable<T> origen)
-    {
-        destino.Clear();
-        foreach (var item in origen)
-        {
-            destino.Add(item);
         }
     }
 

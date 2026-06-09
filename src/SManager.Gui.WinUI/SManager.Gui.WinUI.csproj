@@ -39,6 +39,13 @@
 
     <PublishTrimmed>false</PublishTrimmed>
 
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+
+    <ApplicationTitle>SManager 2.0</ApplicationTitle>
+
+    <!-- MVVMTK0045: aviso AOT/WinRT; esta GUI no publica con trimming ni AOT nativo. -->
+    <NoWarn>$(NoWarn);MVVMTK0045</NoWarn>
+
   </PropertyGroup>
 
 
@@ -73,6 +80,16 @@
 
     <ProjectReference Include="..\SManager.Gui.Shared\SManager.Gui.Shared.csproj" />
 
+  </ItemGroup>
+
+
+
+  <!-- Iconos generados desde assets/icono.svg (ver tools/GenerarIconosApp.ps1). -->
+  <ItemGroup>
+    <Content Include="Assets\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <None Include="..\..\assets\icono.svg" Link="Assets\icono.svg.origen" />
   </ItemGroup>
 
 

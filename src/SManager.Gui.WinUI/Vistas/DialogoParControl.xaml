@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="SManager.Gui.WinUI.Vistas.DialogoParControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    MinWidth="480">
+
+    <StackPanel Spacing="14">
+        <TextBlock
+            x:Name="TextoAyuda"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Text="Define origen, destino y filtros del par de sincronización."
+            TextWrapping="WrapWholeWords" />
+
+        <TextBox x:Name="CajaNombre" Header="Nombre" PlaceholderText="Nombre del par" />
+
+        <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox
+                x:Name="CajaOrigen"
+                Grid.Column="0"
+                Header="Carpeta origen"
+                PlaceholderText="Ruta de origen" />
+            <Button
+                x:Name="BotonOrigen"
+                Grid.Column="1"
+                Margin="0,24,0,0"
+                VerticalAlignment="Bottom"
+                ToolTipService.ToolTip="Examinar origen"
+                Click="BotonOrigen_Click">
+                <SymbolIcon Symbol="Folder" />
+            </Button>
+        </Grid>
+
+        <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox
+                x:Name="CajaDestino"
+                Grid.Column="0"
+                Header="Carpeta destino"
+                PlaceholderText="Ruta de destino" />
+            <Button
+                x:Name="BotonDestino"
+                Grid.Column="1"
+                Margin="0,24,0,0"
+                VerticalAlignment="Bottom"
+                ToolTipService.ToolTip="Examinar destino"
+                Click="BotonDestino_Click">
+                <SymbolIcon Symbol="Folder" />
+            </Button>
+        </Grid>
+
+        <TextBox
+            x:Name="CajaInclusion"
+            Header="Incluir (patrones)"
+            PlaceholderText="*"
+            ToolTipService.ToolTip="Patrones glob separados por ;. * incluye todos los archivos." />
+        <TextBox
+            x:Name="CajaExclusion"
+            Header="Excluir (patrones)"
+            PlaceholderText="*.tmp"
+            ToolTipService.ToolTip="Archivos a ignorar, separados por ;." />
+
+        <StackPanel Orientation="Horizontal" Spacing="24">
+            <ToggleSwitch x:Name="InterruptorActivo" Header="Activo" OnContent="Sí" OffContent="No" />
+            <ToggleSwitch x:Name="InterruptorPausa" Header="Pausado" OnContent="Sí" OffContent="No" />
+        </StackPanel>
+    </StackPanel>
+</UserControl>

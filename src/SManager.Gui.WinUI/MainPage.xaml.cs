@@ -1,6 +1,10 @@
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Navigation;
+using SManager.Gui.WinUI.Models;
+using SManager.Gui.WinUI.Servicios;
 using SManager.Gui.WinUI.ViewModels;
 
 namespace SManager.Gui.WinUI;
@@ -10,6 +14,17 @@ public sealed partial class MainPage : Page
     public MainPageViewModel ViewModel { get; } = new();
 
     private bool _desplazarRegistroAlMostrar = true;
+
+    /// <summary>Evita bucles al revertir el ComboBox de perfil tras cancelar un cambio.</summary>
+    private bool _silenciandoCambioPerfil;
+
+    /// <summary>Tras confirmar cierre con cambios pendientes, permite cerrar sin volver a preguntar.</summary>
+    private bool _cierreVentanaAutorizado;
+
+    private bool _preferenciasMonitorRestauradas;
+
+    private ArrastradorSeparadorMonitor? _arrastradorSeparadorSuperior;
+    private ArrastradorSeparadorMonitor? _arrastradorSeparadorInferior;
 
     public MainPage()
     {
@@ -33,6 +48,66 @@ public sealed partial class MainPage : Page
         }
 
         MostrarSeccion("inicio");
+        App.Window.AppWindow.Closing += AppWindow_Closing;
+        ConfigurarSeparadoresMonitor();
+    }
+
+    /// <summary>Enlaza los separadores horizontales del monitor (sin dependencias externas).</summary>
+    private void ConfigurarSeparadoresMonitor()
+    {
+        void GuardarPreferencias() =>
+            ServicioPreferenciasMonitor.Guardar(
+                FilaMonitorPares,
+                FilaMonitorCopias,
+                FilaMonitorActividad);
+
+        _arrastradorSeparadorSuperior = new ArrastradorSeparadorMonitor(
+            PanelMonitor,
+            FilaMonitorPares,
+            FilaMonitorCopias,
+            indiceFilaSuperior: 1,
+            indiceFilaInferior: 3,
+            GuardarPreferencias);
+        _arrastradorSeparadorSuperior.Enlazar(SeparadorMonitorSuperior);
+
+        _arrastradorSeparadorInferior = new ArrastradorSeparadorMonitor(
+            PanelMonitor,
+            FilaMonitorCopias,
+            FilaMonitorActividad,
+            indiceFilaSuperior: 3,
+            indiceFilaInferior: 5,
+            GuardarPreferencias);
+        _arrastradorSeparadorInferior.Enlazar(SeparadorMonitorInferior);
+    }
+
+    private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        if (_cierreVentanaAutorizado || !ViewModel.HayCambiosSinGuardar)
+        {
+            return;
+        }
+
+        args.Cancel = true;
+
+        var decision = await ViewModel.PreguntarCambiosSinGuardarAsync("cerrar la aplicación");
+        if (decision == DecisionCambiosPendientes.Cancelar)
+        {
+            return;
+        }
+
+        if (decision == DecisionCambiosPendientes.GuardarYContinuar
+            && ViewModel.GuardarCommand.CanExecute(null))
+        {
+            await ViewModel.GuardarCommand.ExecuteAsync(null);
+        }
+        else if (decision == DecisionCambiosPendientes.ContinuarSinGuardar)
+        {
+            ViewModel.DescartarCambiosPendientes();
+        }
+
+        _cierreVentanaAutorizado = true;
+        App.Window.AppWindow.Closing -= AppWindow_Closing;
+        App.Window.Close();
     }
 
     private void NavPrincipal_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
@@ -55,7 +130,18 @@ public sealed partial class MainPage : Page
         PanelPares.Visibility = tag == "pares" ? Visibility.Visible : Visibility.Collapsed;
         PanelMonitor.Visibility = tag == "monitor" ? Visibility.Visible : Visibility.Collapsed;
         PanelRegistro.Visibility = tag == "registro" ? Visibility.Visible : Visibility.Collapsed;
+        PanelEstadisticas.Visibility = tag == "estadisticas" ? Visibility.Visible : Visibility.Collapsed;
+        PanelGuia.Visibility = tag == "guia" ? Visibility.Visible : Visibility.Collapsed;
         PanelAjustes.Visibility = tag == "ajustes" ? Visibility.Visible : Visibility.Collapsed;
+
+        if (tag == "monitor" && !_preferenciasMonitorRestauradas)
+        {
+            ServicioPreferenciasMonitor.RestaurarSiExiste(
+                FilaMonitorPares,
+                FilaMonitorCopias,
+                FilaMonitorActividad);
+            _preferenciasMonitorRestauradas = true;
+        }
 
         if (tag == "registro" && _desplazarRegistroAlMostrar)
         {
@@ -79,12 +165,16 @@ public sealed partial class MainPage : Page
     /// <summary>Coloca el scroll en la última línea del registro.</summary>
     private void DesplazarRegistroAlFinal()
     {
-        // Esperar al layout tras actualizar TextBlock evita quedarse a mitad del log.
+        if (ViewModel.LineasRegistro.Count == 0)
+        {
+            return;
+        }
+
+        // Sin UpdateLayout(): forzar layout completo parpadea todas las filas visibles.
         DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
         {
-            ScrollRegistro.UpdateLayout();
-            TextoRegistroBloque.UpdateLayout();
-            ScrollRegistro.ChangeView(null, ScrollRegistro.ScrollableHeight, null, disableAnimation: true);
+            var ultima = ViewModel.LineasRegistro[^1];
+            ListaRegistro.ScrollIntoView(ultima);
         });
     }
 
@@ -93,6 +183,9 @@ public sealed partial class MainPage : Page
 
     private void IrAMonitor_Click(object sender, RoutedEventArgs e) =>
         SeleccionarSeccionPorTag("monitor");
+
+    private void IrAGuia_Click(object sender, RoutedEventArgs e) =>
+        SeleccionarSeccionPorTag("guia");
 
     private void SeleccionarSeccionPorTag(string tag)
     {
@@ -107,11 +200,93 @@ public sealed partial class MainPage : Page
         }
     }
 
-    private void Perfil_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void Perfil_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (e.AddedItems.Count > 0)
+        if (_silenciandoCambioPerfil || e.AddedItems.Count == 0)
         {
-            ViewModel.CambiarPerfilCommand.Execute(null);
+            return;
+        }
+
+        if (ViewModel.ConsumirOmitirCambioPerfilInicial())
+        {
+            return;
+        }
+
+        var perfilNuevo = e.AddedItems[0] as string;
+        var perfilAnterior = e.RemovedItems.Count > 0 ? e.RemovedItems[0] as string : null;
+        if (string.IsNullOrWhiteSpace(perfilNuevo))
+        {
+            return;
+        }
+
+        var decision = await ViewModel.PreguntarCambiosSinGuardarAsync("cambiar de perfil");
+        switch (decision)
+        {
+            case DecisionCambiosPendientes.Cancelar:
+                if (!string.IsNullOrWhiteSpace(perfilAnterior))
+                {
+                    _silenciandoCambioPerfil = true;
+                    ViewModel.PerfilSeleccionado = perfilAnterior;
+                    _silenciandoCambioPerfil = false;
+                }
+
+                return;
+            case DecisionCambiosPendientes.GuardarYContinuar:
+                if (ViewModel.GuardarCommand.CanExecute(null))
+                {
+                    await ViewModel.GuardarCommand.ExecuteAsync(null);
+                }
+
+                break;
+            case DecisionCambiosPendientes.ContinuarSinGuardar:
+                ViewModel.DescartarCambiosPendientes();
+                break;
+        }
+
+        ViewModel.AplicarCambioPerfilCommand.Execute(null);
+    }
+
+    private async void BotonIniciar_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.PuedeIniciar)
+        {
+            await ViewModel.IniciarCommand.ExecuteAsync(null);
+        }
+    }
+
+    private async void BotonDetener_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.PuedeDetener)
+        {
+            await ViewModel.DetenerCommand.ExecuteAsync(null);
+        }
+    }
+
+    private async void BotonRecargar_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.PuedeDetener)
+        {
+            await ViewModel.RecargarCommand.ExecuteAsync(null);
+        }
+    }
+
+    /// <summary>Atajo Ctrl+S: guarda la configuración del perfil activo.</summary>
+    private void AtajoGuardar_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (ViewModel.GuardarCommand.CanExecute(null))
+        {
+            ViewModel.GuardarCommand.Execute(null);
+            args.Handled = true;
+        }
+    }
+
+    /// <summary>Atajo F5: recarga el demonio si está en ejecución.</summary>
+    private async void AtajoRecargar_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (ViewModel.PuedeDetener)
+        {
+            await ViewModel.RecargarCommand.ExecuteAsync(null);
+            args.Handled = true;
         }
     }
 }

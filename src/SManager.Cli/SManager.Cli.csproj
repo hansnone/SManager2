@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\SManager.Gui.Shared\SManager.Gui.Shared.csproj" />
     <ProjectReference Include="..\SManager.Ipc\SManager.Ipc.csproj" />
   </ItemGroup>
 

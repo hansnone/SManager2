@@ -44,6 +44,13 @@ public static class ServicioFiltradoRegistro
     private static bool CoincideLinea(
         string linea,
         string nombrePar,
+        IReadOnlyDictionary<string, string> mapaIdANombrePar) =>
+        CoincideLineaPublica(linea, nombrePar, mapaIdANombrePar);
+
+    /// <summary>Expuesto para reutilizar la lógica de filtro por par desde el analizador de registro.</summary>
+    public static bool CoincideLineaPublica(
+        string linea,
+        string nombrePar,
         IReadOnlyDictionary<string, string> mapaIdANombrePar)
     {
         // Formato nuevo: [par:NombreDelPar] o [par:*] para mensajes globales.

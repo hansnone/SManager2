@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Hosting;
 using SManager.Core.Configuracion;
 using SManager.Core.Motor;
 using SManager.Ipc;
@@ -12,13 +13,19 @@ public sealed class DemonioPerfilWorker : BackgroundService
     private readonly OpcionesArranque _opciones;
     private readonly ILogger<DemonioPerfilWorker> _logger;
     private readonly ILoggerFactory _fabricaLogs;
+    private readonly IHostApplicationLifetime _cicloVidaHost;
     private MotorSincronizacion? _motor;
 
-    public DemonioPerfilWorker(OpcionesArranque opciones, ILogger<DemonioPerfilWorker> logger, ILoggerFactory fabricaLogs)
+    public DemonioPerfilWorker(
+        OpcionesArranque opciones,
+        ILogger<DemonioPerfilWorker> logger,
+        ILoggerFactory fabricaLogs,
+        IHostApplicationLifetime cicloVidaHost)
     {
         _opciones = opciones;
         _logger = logger;
         _fabricaLogs = fabricaLogs;
+        _cicloVidaHost = cicloVidaHost;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -69,6 +76,9 @@ public sealed class DemonioPerfilWorker : BackgroundService
                 await _motor.DetenerOrdenadoAsync(CancellationToken.None).ConfigureAwait(false);
                 await _motor.DisposeAsync().ConfigureAwait(false);
             }
+
+            // Sin esto el proceso Host queda vivo sin PID y bloquea recursos aunque el motor ya paró.
+            _cicloVidaHost.StopApplication();
         }
     }
 }

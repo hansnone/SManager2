@@ -28,6 +28,7 @@ public sealed class MotorSincronizacion : IAsyncDisposable
     private DateTime? _ultimaMarcaConfig;
     private DateTime? _recargaPendienteDesde;
     private readonly Dictionary<string, ResumenParInterno> _resumenPares = new(StringComparer.OrdinalIgnoreCase);
+    private readonly MuestreadorRecursosProceso _muestreadorRecursos = new();
 
     public Task? TareaPrincipal => _tareaBucle;
 
@@ -64,6 +65,7 @@ public sealed class MotorSincronizacion : IAsyncDisposable
             Config = config,
             Pares = config.Pares.ToList(),
             EnEjecucion = true,
+            InicioSesionUtc = DateTime.UtcNow,
             ProximoPollingUtc = DateTime.UtcNow.AddSeconds(config.IntervaloPollingSegundos)
         };
 
@@ -132,7 +134,7 @@ public sealed class MotorSincronizacion : IAsyncDisposable
 
         if (_poolCopiadores is not null)
         {
-            await _poolCopiadores.DetenerAsync(TimeSpan.FromMinutes(10)).ConfigureAwait(false);
+            await _poolCopiadores.DetenerAsync(TimeSpan.FromMinutes(2)).ConfigureAwait(false);
         }
 
         if (_poolHidratadores is not null)
@@ -168,12 +170,7 @@ public sealed class MotorSincronizacion : IAsyncDisposable
         {
             while (!cancelacion.IsCancellationRequested)
             {
-                DrenarLineasLogAlDisco();
-                DetectarCambioConfig();
-                await ProcesarRecargaPendienteAsync(cancelacion).ConfigureAwait(false);
-                ProcesarEstadisticas();
-                ProcesarPollingSeguridad();
-
+                // Prioridad: atender APAGAR/RECARGAR antes de trabajo pesado del ciclo.
                 var comando = await _ipc.LeerComandoPendienteAsync(_opciones.NombrePerfil, cancelacion)
                     .ConfigureAwait(false);
 
@@ -181,6 +178,7 @@ public sealed class MotorSincronizacion : IAsyncDisposable
                 {
                     await _ipc.LimpiarComandoAsync(_opciones.NombrePerfil, cancelacion).ConfigureAwait(false);
                     _logger.LogInformation("Señal APAGAR recibida para perfil {Perfil}", _opciones.NombrePerfil);
+                    SolicitarApagadoInmediato();
                     break;
                 }
 
@@ -190,6 +188,12 @@ public sealed class MotorSincronizacion : IAsyncDisposable
                     _recargaPendienteDesde = DateTime.UtcNow.AddSeconds(-10);
                     await ProcesarRecargaPendienteAsync(cancelacion).ConfigureAwait(false);
                 }
+
+                DrenarLineasLogAlDisco();
+                DetectarCambioConfig();
+                await ProcesarRecargaPendienteAsync(cancelacion).ConfigureAwait(false);
+                ProcesarEstadisticas();
+                ProcesarPollingSeguridad();
 
                 _estado.DrenarActividadAlHistorial();
                 var estadoIpc = ConstruirEstadoIpc();
@@ -218,6 +222,23 @@ public sealed class MotorSincronizacion : IAsyncDisposable
         }
     }
 
+    private void SolicitarApagadoInmediato()
+    {
+        if (_estado is null)
+        {
+            return;
+        }
+
+        _estado.AceptarNuevosTrabajos = false;
+        _estado.EnEjecucion = false;
+        _estado.SolicitudParada = true;
+        _estado.SolicitudParadaCopiadores = true;
+        _estado.SolicitudParadaHidratadores = true;
+        _estado.ColaCopia.CompletarEscritura();
+        _estado.ColaHidratacion.CompletarEscritura();
+        _estado.EncolarLog("__ALL__", "INFO", "Apagado solicitado: deteniendo trabajos en curso");
+    }
+
     private async Task DetenerWorkersSinBucleAsync()
     {
         if (_gestorVigias is not null)
@@ -227,7 +248,7 @@ public sealed class MotorSincronizacion : IAsyncDisposable
 
         if (_poolCopiadores is not null)
         {
-            await _poolCopiadores.DetenerAsync(TimeSpan.FromMinutes(10)).ConfigureAwait(false);
+            await _poolCopiadores.DetenerAsync(TimeSpan.FromMinutes(2)).ConfigureAwait(false);
         }
 
         if (_poolHidratadores is not null)
@@ -428,12 +449,7 @@ public sealed class MotorSincronizacion : IAsyncDisposable
         }
 
         var copiasEnCurso = estado.CopiasEnCurso.Values
-            .Select(c => new CopiaEnCurso
-            {
-                Archivo = c.Archivo,
-                IdPar = c.IdPar,
-                Copiador = c.Copiador
-            })
+            .Select(CrearCopiaEnCursoIpc)
             .ToList();
 
         var pares = _resumenPares.Values.Select(r => new ResumenPar
@@ -446,6 +462,8 @@ public sealed class MotorSincronizacion : IAsyncDisposable
             UltimaSincronizacion = r.UltimaSincronizacion
         }).ToList();
 
+        var (memoriaBytes, cpuPorcentaje) = _muestreadorRecursos.Muestrear();
+
         return new EstadoPerfil
         {
             Perfil = _opciones.NombrePerfil,
@@ -457,10 +475,17 @@ public sealed class MotorSincronizacion : IAsyncDisposable
             ArchivosUnicosPendientes = estado.ColaCopia.PendientesEnCola,
             DuplicadosEvitados = estado.Metricas.DuplicadosEvitados,
             HidratacionesActivas = estado.HidratacionesActivas.Count,
+            InicioSesionUtc = estado.InicioSesionUtc.ToString("o"),
             Totales = new TotalesEstado
             {
                 Copiados = estado.Metricas.TotalCopiados,
-                Errores = estado.Metricas.TotalErrores
+                Errores = estado.Metricas.TotalErrores,
+                BytesEscritos = estado.Metricas.BytesEscritos
+            },
+            Recursos = new RecursosProceso
+            {
+                MemoriaTrabajoBytes = memoriaBytes,
+                CpuPorcentaje = cpuPorcentaje
             },
             Pares = pares,
             ActividadReciente = actividad,
@@ -509,6 +534,41 @@ public sealed class MotorSincronizacion : IAsyncDisposable
         }
 
         return lineas;
+    }
+
+    private static CopiaEnCurso CrearCopiaEnCursoIpc(CopiaEnCursoInterna copia)
+    {
+        var porcentaje = copia.BytesTotales > 0
+            ? (int)Math.Clamp(copia.BytesCopiados * 100 / copia.BytesTotales, 0, 100)
+            : 0;
+
+        int? etaSegundos = null;
+        if (copia.BytesTotales > 0
+            && copia.BytesCopiados > 0
+            && copia.BytesCopiados < copia.BytesTotales
+            && copia.InicioUtc != default)
+        {
+            var transcurrido = (DateTime.UtcNow - copia.InicioUtc).TotalSeconds;
+            if (transcurrido > 0.5)
+            {
+                var velocidad = copia.BytesCopiados / transcurrido;
+                if (velocidad > 0)
+                {
+                    etaSegundos = (int)Math.Ceiling((copia.BytesTotales - copia.BytesCopiados) / velocidad);
+                }
+            }
+        }
+
+        return new CopiaEnCurso
+        {
+            Archivo = copia.Archivo,
+            IdPar = copia.IdPar,
+            Copiador = copia.Copiador,
+            BytesTotales = copia.BytesTotales,
+            BytesCopiados = copia.BytesCopiados,
+            Porcentaje = porcentaje,
+            EtaSegundos = etaSegundos
+        };
     }
 
     /// <summary>Resuelve el nombre legible del par; si no existe, conserva el IdPar.</summary>

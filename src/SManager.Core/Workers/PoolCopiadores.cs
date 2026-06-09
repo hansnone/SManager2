@@ -63,12 +63,31 @@ public sealed class PoolCopiadores : IAsyncDisposable
                 // Mantener nombre simple.
             }
 
+            long tamanoArchivo = 0;
+            try
+            {
+                tamanoArchivo = new FileInfo(trabajo.RutaCompleta).Length;
+            }
+            catch
+            {
+                // Si no se puede leer el tamaño, la barra quedará indeterminada.
+            }
+
             _estado.CopiasEnCurso[trabajo.RutaCompleta] = new CopiaEnCursoInterna(
-                rutaRelativa, par.IdPar, idCopiador);
+                rutaRelativa,
+                par.IdPar,
+                idCopiador,
+                tamanoArchivo,
+                0,
+                DateTime.UtcNow);
 
             try
             {
                 _servicioCopia.EjecutarCopiaCondicional(_estado, trabajo.RutaCompleta, par, idCopiador);
+            }
+            catch (OperationCanceledException)
+            {
+                // Apagado ordenado: no registrar como error de copia.
             }
             catch (Exception ex)
             {
@@ -98,7 +117,7 @@ public sealed class PoolCopiadores : IAsyncDisposable
         var limite = DateTime.UtcNow.Add(timeoutDrenado);
         while (DateTime.UtcNow < limite)
         {
-            if (_estado.ColaCopia.PendientesEnCola == 0 && _estado.CopiasEnCurso.IsEmpty)
+            if (_estado.CopiasEnCurso.IsEmpty)
             {
                 break;
             }

@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using SManager.Ipc;
 
 namespace SManager.Gui.WinUI;
 
@@ -14,6 +15,28 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+        UnhandledException += App_UnhandledException;
+    }
+
+    /// <summary>Registra fallos no capturados para diagnosticar cierres inesperados.</summary>
+    private void App_UnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+        try
+        {
+            Directory.CreateDirectory(RutasDatos.ResolverRaiz());
+            var ruta = Path.Combine(RutasDatos.ResolverRaiz(), "gui_crash.log");
+            var linea =
+                $"[{DateTimeOffset.Now:O}] {e.Exception.GetType().Name}: {e.Exception.Message}{Environment.NewLine}"
+                + e.Exception.StackTrace
+                + Environment.NewLine
+                + new string('-', 60)
+                + Environment.NewLine;
+            File.AppendAllText(ruta, linea);
+        }
+        catch
+        {
+            // Si no podemos escribir el log, al menos no añadimos otro fallo.
+        }
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)

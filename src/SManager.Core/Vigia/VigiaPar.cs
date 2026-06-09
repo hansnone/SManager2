@@ -7,6 +7,7 @@ namespace SManager.Core.Vigia;
 /// <summary>
 /// Vigía por par: FileSystemWatcher + estabilidad + encolado (sin copiar).
 /// Un hilo de tarea por par, aislado con bulkhead pattern.
+/// No propaga borrados del origen al destino (sincronización unidireccional, no espejo).
 /// </summary>
 public sealed class VigiaPar : IAsyncDisposable
 {
@@ -281,7 +282,11 @@ public sealed class VigiaPar : IAsyncDisposable
             if (_estado.HidratacionesActivas.TryAdd(info.FullName, 0))
             {
                 _estado.EncolarLog(_idPar, "PENDIENTE", $"Hidratación OneDrive: {info.Name}");
-                _estado.ColaHidratacion.IntentarEncolar(new TrabajoHidratacion(par.IdPar, info.FullName));
+                if (!_estado.ColaHidratacion.IntentarEncolar(new TrabajoHidratacion(par.IdPar, info.FullName)))
+                {
+                    _estado.HidratacionesActivas.TryRemove(info.FullName, out _);
+                    _estado.EncolarLog(_idPar, "WARN", $"Cola de hidratación llena; reintentando: {info.Name}");
+                }
             }
 
             return true;
@@ -369,14 +374,26 @@ public sealed class VigiaPar : IAsyncDisposable
                 var segEstable = (ahora - est.EstableDesdeUtc.Value).TotalSeconds;
                 if (segEstable >= segundosRequeridos)
                 {
-                    if (_estado.AceptarNuevosTrabajos)
+                    if (!_estado.AceptarNuevosTrabajos)
                     {
-                        _estado.ColaCopia.IntentarEncolar(
-                            new TrabajoCopia(par.IdPar, clave),
-                            _estado.Metricas);
+                        continue;
                     }
 
-                    aEliminar.Add(clave);
+                    var encolado = _estado.ColaCopia.IntentarEncolar(
+                        new TrabajoCopia(par.IdPar, clave),
+                        _estado.Metricas);
+
+                    if (encolado)
+                    {
+                        aEliminar.Add(clave);
+                    }
+                    else
+                    {
+                        _estado.EncolarLog(
+                            _idPar,
+                            "WARN",
+                            $"Cola de copia llena; reintentando: {Path.GetFileName(clave)}");
+                    }
                 }
             }
 

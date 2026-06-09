@@ -1,10 +1,53 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+
 namespace SManager.Gui.WinUI.Models;
 
-public sealed class MonitorParViewModel
+/// <summary>Fila del monitor en tiempo real con chip de estado tematizado en XAML.</summary>
+public partial class MonitorParViewModel : ObservableObject
 {
-    public string Nombre { get; init; } = string.Empty;
-    public string Estado { get; init; } = string.Empty;
-    public int Copiados { get; init; }
-    public int Errores { get; init; }
+    [ObservableProperty]
+    private string _nombre = string.Empty;
+
+    [ObservableProperty]
+    private string _estado = string.Empty;
+
+    [ObservableProperty]
+    private int _copiados;
+
+    [ObservableProperty]
+    private int _errores;
+
+    /// <summary>Actualiza solo propiedades distintas para evitar repintado completo de la fila.</summary>
+    public void ActualizarDesde(string nombre, string estado, int copiados, int errores)
+    {
+        if (Nombre != nombre)
+        {
+            Nombre = nombre;
+        }
+
+        if (Estado != estado)
+        {
+            Estado = estado;
+        }
+
+        if (Copiados != copiados)
+        {
+            Copiados = copiados;
+        }
+
+        if (Errores != errores)
+        {
+            Errores = errores;
+        }
+    }
+
+    public static MonitorParViewModel Crear(string nombre, string estado, int copiados, int errores) =>
+        new()
+        {
+            Nombre = nombre,
+            Estado = estado,
+            Copiados = copiados,
+            Errores = errores
+        };
 }
 

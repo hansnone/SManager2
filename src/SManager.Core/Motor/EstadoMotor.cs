@@ -39,6 +39,10 @@ public sealed class EstadoMotor
         new(StringComparer.OrdinalIgnoreCase);
 
     public DateTime? ProximoPollingUtc { get; set; }
+
+    /// <summary>Momento UTC en que arrancó esta sesión del demonio.</summary>
+    public DateTime InicioSesionUtc { get; set; }
+
     public MetricasMotor Metricas { get; } = new();
 
     public readonly object CandadoPares = new();

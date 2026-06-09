@@ -110,12 +110,13 @@ public sealed class MotorIntegracionTests : IAsyncLifetime
         await motor.IniciarAsync(CancellationToken.None).ConfigureAwait(false);
 
         var ipc = new ServicioIpc();
-        Assert.True(ipc.EstaDemonioEnEjecucion(_perfil));
+        var rutaPid = RutasDatos.ObtenerRutaPid(_perfil);
+        Assert.True(File.Exists(rutaPid), "El motor debe registrar el PID al arrancar.");
 
         await ipc.EnviarComandoAsync(_perfil, ComandoControl.Apagar).ConfigureAwait(false);
 
         var detenido = await EsperarCondicionAsync(
-            () => !ipc.EstaDemonioEnEjecucion(_perfil),
+            () => !File.Exists(rutaPid),
             TimeSpan.FromSeconds(30)).ConfigureAwait(false);
 
         Assert.True(detenido, "El demonio no se detuvo tras la señal APAGAR.");

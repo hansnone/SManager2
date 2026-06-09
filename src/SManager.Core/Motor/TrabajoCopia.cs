@@ -26,4 +26,7 @@ public sealed record EntradaActividadInterna(
 public sealed record CopiaEnCursoInterna(
     string Archivo,
     string IdPar,
-    int Copiador);
+    int Copiador,
+    long BytesTotales = 0,
+    long BytesCopiados = 0,
+    DateTime InicioUtc = default);
