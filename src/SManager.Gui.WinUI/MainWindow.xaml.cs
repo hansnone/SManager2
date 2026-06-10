@@ -49,4 +49,18 @@ public sealed partial class MainWindow : Window
             // Icono opcional: no debe impedir abrir la ventana.
         }
     }
+
+    /// <summary>Restaura la ventana principal tras minimizarla a la bandeja del sistema.</summary>
+    public void RestaurarDesdeBandeja()
+    {
+        AppWindow.Show();
+
+        if (AppWindow.Presenter is OverlappedPresenter presentador
+            && presentador.State == OverlappedPresenterState.Minimized)
+        {
+            presentador.Restore();
+        }
+
+        Activate();
+    }
 }

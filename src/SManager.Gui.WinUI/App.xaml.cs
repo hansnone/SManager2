@@ -60,6 +60,12 @@ public partial class App : Application
         Window.AppWindow.Resize(new Windows.Graphics.SizeInt32(1280, 840));
         Window.Activate();
 
+        if (Window.Content is FrameworkElement raiz)
+        {
+            var preferencias = ServicioPreferenciasGui.Cargar();
+            ServicioTemaAplicacion.Aplicar(preferencias.TemaAplicacion, raiz);
+        }
+
         // Instalador o registro Run pueden pasar -minimized para abrir en la barra de tareas.
         var iniciarMinimizado = Environment.GetCommandLineArgs()
             .Any(argumento => string.Equals(argumento, "-minimized", StringComparison.OrdinalIgnoreCase));

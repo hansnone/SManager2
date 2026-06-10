@@ -1,3 +1,4 @@
+using SManager.Core.Utilidades;
 using SManager.Gui.WinUI.Servicios;
 
 namespace SManager.Gui.WinUI.Models;
@@ -15,6 +16,9 @@ public sealed class LineaRegistroViewModel
 
     public string Mensaje { get; init; } = string.Empty;
 
+    /// <summary>Texto amigable para la columna principal; el tooltip conserva el mensaje técnico.</summary>
+    public string MensajeLegible { get; init; } = string.Empty;
+
     /// <summary>Construye la vista a partir de una línea en disco o legado sin parsear.</summary>
     public static LineaRegistroViewModel DesdeTexto(string linea)
     {
@@ -26,7 +30,8 @@ public sealed class LineaRegistroViewModel
                 Hora = hora,
                 Par = par,
                 Nivel = nivel,
-                Mensaje = mensaje
+                Mensaje = mensaje,
+                MensajeLegible = ServicioMensajesErrorHumano.TraducirMensajeRegistro(nivel, mensaje)
             };
         }
 
@@ -34,7 +39,8 @@ public sealed class LineaRegistroViewModel
         {
             TextoCompleto = linea,
             Nivel = "—",
-            Mensaje = linea
+            Mensaje = linea,
+            MensajeLegible = linea
         };
     }
 }

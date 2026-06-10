@@ -2,12 +2,41 @@
 
 Sincronización unidireccional **origen → destino** para Windows. Vigila carpetas, copia archivos de forma fiable y ofrece telemetría en tiempo real mediante una interfaz gráfica (WinUI), una línea de comandos y un demonio en segundo plano.
 
+## Para qué sirve
+
+SManager mantiene una **copia actualizada** de una carpeta en otra ubicación: disco externo, NAS, unidad de red o carpeta de backup en el mismo PC.
+
+Casos de uso habituales:
+
+- Copiar fotos y vídeos a un disco USB.
+- Replicar documentos de trabajo en un servidor o NAS.
+- Mantener una carpeta de proyecto en un segundo disco.
+- Automatizar copias con la CLI (`smanager.exe`) en scripts o tareas programadas.
+
+## Qué NO hace
+
+- **No** es sincronización bidireccional (no fusiona dos carpetas activas).
+- **No** es un servicio de nube por sí solo (tú defines origen y destino).
+- **No** elimina en destino archivos que desaparezcan del origen.
+- **No** sustituye un sistema de backup con historial de versiones.
+
+## Interfaz (capturas)
+
+> Añade capturas en [`docs/screenshots/`](docs/screenshots/README.md) y descomenta las líneas siguientes en este README.
+
+<!--
+![Panel de control](docs/screenshots/01-inicio.png)
+![Asistente de configuración](docs/screenshots/02-asistente.png)
+![Analizar cambios](docs/screenshots/04-analizar-cambios.png)
+-->
+
 ## Características
 
 - Varios **perfiles** independientes (cada uno con su configuración, log y telemetría).
 - **Pares de sincronización** con filtros de inclusión/exclusión (patrones glob).
 - Motor con cola de copia, hidratación de archivos en la nube, deduplicación y polling de seguridad.
-- **GUI** con monitor en vivo, registro filtrable, estadísticas y ajustes avanzados.
+- **GUI** con asistente de primer uso, monitor en vivo, registro filtrable, estadísticas y ajustes avanzados.
+- **Modo básico / avanzado**, tema claro/oscuro, historial de sesiones y atajos de teclado.
 - **CLI** (`smanager.exe`) para automatización e integración con scripts.
 - Instalador único **self-contained** (no requiere instalar .NET ni Windows App SDK).
 
@@ -31,13 +60,37 @@ Los datos de la aplicación se guardan en:
 
 ## Uso rápido
 
-1. Abre la GUI y elige o crea un **perfil**.
-2. En **Sincronización**, define pares origen → destino.
-3. Pulsa **Guardar** (Ctrl+S).
-4. Pulsa **Iniciar** para lanzar el demonio.
-5. Sigue el progreso en **Monitor**, **Registro** y **Estadísticas**.
+**Primera vez (recomendado):**
 
-La documentación completa de la interfaz está en la sección **Guía** dentro de la aplicación.
+1. Abre la GUI — se mostrará el **asistente de configuración** si no hay pares.
+2. Elige una plantilla (fotos, documentos, trabajo…) y las carpetas origen y destino.
+3. Revisa la **vista previa** con «Analizar cambios».
+4. Crea el par y pulsa **Iniciar**.
+
+**Uso manual:**
+
+1. Abre la GUI y elige o crea un **perfil**.
+2. En **Sincronización**, define pares origen → destino (o usa el asistente desde Inicio).
+3. Opcional: **Analizar cambios** antes de copiar.
+4. Pulsa **Guardar** (Ctrl+S).
+5. Pulsa **Iniciar** para lanzar el demonio.
+6. Sigue el progreso en **Inicio**, **Monitor**, **Registro** y **Estadísticas**.
+
+La documentación completa está en la sección **Guía** dentro de la aplicación.
+
+### Modo básico vs avanzado
+
+Por defecto la GUI usa **modo básico** (Inicio, Sincronización, Guía). Activa **modo avanzado** en Ajustes → Interfaz para ver Monitor, Registro, Estadísticas y parámetros del motor.
+
+### Atajos de teclado
+
+| Atajo | Acción |
+|-------|--------|
+| Ctrl+S | Guardar configuración |
+| Ctrl+I | Iniciar sincronización |
+| Ctrl+Shift+S | Detener demonio |
+| Ctrl+Shift+A | Analizar cambios |
+| F5 | Recargar demonio |
 
 ## Línea de comandos
 

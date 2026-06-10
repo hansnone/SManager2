@@ -8,6 +8,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:models="using:SManager.Gui.WinUI.Models"
     xmlns:conv="using:SManager.Gui.WinUI.Convertidores"
+    xmlns:vistas="using:SManager.Gui.WinUI.Vistas"
     mc:Ignorable="d">
 
     <Page.KeyboardAccelerators>
@@ -20,6 +21,21 @@
             Key="F5"
             Invoked="AtajoRecargar_Invoked"
             ToolTipService.ToolTip="Recargar demonio (F5)" />
+        <KeyboardAccelerator
+            Key="I"
+            Modifiers="Control"
+            Invoked="AtajoIniciar_Invoked"
+            ToolTipService.ToolTip="Iniciar sincronización (Ctrl+I)" />
+        <KeyboardAccelerator
+            Key="S"
+            Modifiers="Control,Shift"
+            Invoked="AtajoDetener_Invoked"
+            ToolTipService.ToolTip="Detener demonio (Ctrl+Shift+S)" />
+        <KeyboardAccelerator
+            Key="A"
+            Modifiers="Control,Shift"
+            Invoked="AtajoAnalizar_Invoked"
+            ToolTipService.ToolTip="Analizar cambios (Ctrl+Shift+A)" />
     </Page.KeyboardAccelerators>
 
     <Page.Resources>
@@ -99,7 +115,8 @@
         </Style>
     </Page.Resources>
 
-    <NavigationView
+    <Grid>
+        <NavigationView
         x:Name="NavPrincipal"
         IsBackButtonVisible="Collapsed"
         IsSettingsVisible="True"
@@ -146,17 +163,29 @@
                     <SymbolIcon Symbol="Sync" />
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
-            <NavigationViewItem Content="Monitor" Tag="monitor">
+            <NavigationViewItem
+                x:Name="NavMonitor"
+                Content="Monitor"
+                Tag="monitor"
+                Visibility="{x:Bind ViewModel.ModoInterfazAvanzado, Mode=OneWay, Converter={StaticResource BoolAVis}}">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="View" />
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
-            <NavigationViewItem Content="Registro" Tag="registro">
+            <NavigationViewItem
+                x:Name="NavRegistro"
+                Content="Registro"
+                Tag="registro"
+                Visibility="{x:Bind ViewModel.ModoInterfazAvanzado, Mode=OneWay, Converter={StaticResource BoolAVis}}">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Document" />
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
-            <NavigationViewItem Content="Estadísticas" Tag="estadisticas">
+            <NavigationViewItem
+                x:Name="NavEstadisticas"
+                Content="Estadísticas"
+                Tag="estadisticas"
+                Visibility="{x:Bind ViewModel.ModoInterfazAvanzado, Mode=OneWay, Converter={StaticResource BoolAVis}}">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="ViewAll" />
                 </NavigationViewItem.Icon>
@@ -185,12 +214,17 @@
                 BorderThickness="0,0,0,1">
                 <StackPanel Spacing="12">
                     <StackPanel Spacing="2">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
+                        <StackPanel
+                            Orientation="Horizontal"
+                            Spacing="8"
+                            AutomationProperties.Name="{x:Bind ViewModel.TextoEstadoAccesible, Mode=OneWay}"
+                            AutomationProperties.LiveSetting="Polite">
                             <Ellipse
                                 Width="10"
                                 Height="10"
                                 VerticalAlignment="Center"
-                                Fill="{x:Bind ViewModel.ColorEstado, Mode=OneWay}" />
+                                Fill="{x:Bind ViewModel.ColorEstado, Mode=OneWay}"
+                                AutomationProperties.Name="Indicador de estado" />
                             <TextBlock
                                 FontWeight="SemiBold"
                                 Text="{x:Bind ViewModel.TextoEstado, Mode=OneWay}" />
@@ -210,10 +244,12 @@
                         VerticalScrollMode="Disabled">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <Button
+                                x:Name="BotonIniciarSync"
                                 Style="{StaticResource AccentButtonStyle}"
                                 Click="BotonIniciar_Click"
                                 IsEnabled="{x:Bind ViewModel.PuedeIniciar, Mode=OneWay}"
-                                ToolTipService.ToolTip="Iniciar sincronización">
+                                AutomationProperties.Name="Iniciar sincronización"
+                                ToolTipService.ToolTip="Iniciar sincronización (Ctrl+I)">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <SymbolIcon Symbol="Play" />
                                     <TextBlock Text="Iniciar" VerticalAlignment="Center" />
@@ -222,7 +258,8 @@
                             <Button
                                 Click="BotonDetener_Click"
                                 IsEnabled="{x:Bind ViewModel.PuedeDetener, Mode=OneWay}"
-                                ToolTipService.ToolTip="Detener demonio">
+                                AutomationProperties.Name="Detener sincronización"
+                                ToolTipService.ToolTip="Detener demonio (Ctrl+Shift+S)">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <SymbolIcon Symbol="Stop" />
                                     <TextBlock Text="Detener" VerticalAlignment="Center" />
@@ -237,6 +274,22 @@
                                     <TextBlock Text="Recargar" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Button>
+                            <Button
+                                x:Name="BotonAnalizarCambios"
+                                Command="{x:Bind ViewModel.AnalizarCambiosCommand}"
+                                IsEnabled="{x:Bind ViewModel.PuedeAnalizarCambios, Mode=OneWay}"
+                                AutomationProperties.Name="Analizar cambios"
+                                ToolTipService.ToolTip="Comparar origen y destino sin copiar archivos (Ctrl+Shift+A)">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <SymbolIcon Symbol="Find" />
+                                    <TextBlock Text="Analizar cambios" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <ProgressRing
+                                Width="20"
+                                Height="20"
+                                IsActive="{x:Bind ViewModel.AnalizandoCambios, Mode=OneWay}"
+                                Visibility="{x:Bind ViewModel.AnalizandoCambios, Mode=OneWay, Converter={StaticResource BoolAVis}}" />
                             <Button
                                 Command="{x:Bind ViewModel.GuardarCommand}"
                                 IsEnabled="{x:Bind ViewModel.PuedeEditarConfig, Mode=OneWay}"
@@ -271,13 +324,44 @@
                             <TextBlock Style="{StaticResource TituloSeccion}" Text="Panel de control" />
                             <TextBlock
                                 Style="{StaticResource SubtituloSeccion}"
-                                Text="Resumen del estado actual y accesos rápidos a las secciones principales." />
+                                Text="Estado de la sincronización unidireccional (origen → destino) y accesos rápidos." />
                         </StackPanel>
 
                         <Border Style="{StaticResource Tarjeta}">
                             <StackPanel Spacing="12">
-                                <TextBlock FontWeight="SemiBold" Text="Estado del servicio" />
-                                <TextBlock Text="{x:Bind ViewModel.TextoResumen, Mode=OneWay}" TextWrapping="Wrap" />
+                                <TextBlock FontWeight="SemiBold" Text="{x:Bind ViewModel.TextoDashboardPerfil, Mode=OneWay}" />
+                                <Grid ColumnSpacing="16" RowSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Spacing="4">
+                                        <TextBlock Style="{StaticResource EtiquetaMetrica}" Text="Estado" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Ellipse
+                                                Width="10"
+                                                Height="10"
+                                                VerticalAlignment="Center"
+                                                Fill="{x:Bind ViewModel.ColorEstado, Mode=OneWay}" />
+                                            <TextBlock FontWeight="SemiBold" Text="{x:Bind ViewModel.TextoEstado, Mode=OneWay}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="4">
+                                        <TextBlock Style="{StaticResource EtiquetaMetrica}" Text="Progreso actual" />
+                                        <TextBlock Style="{StaticResource ValorMetrica}" FontSize="16" Text="{x:Bind ViewModel.TextoDashboardProgreso, Mode=OneWay}" />
+                                    </StackPanel>
+                                </Grid>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Style="{StaticResource EtiquetaMetrica}" Text="Archivo actual" />
+                                    <TextBlock
+                                        Text="{x:Bind ViewModel.TextoArchivoActual, Mode=OneWay}"
+                                        TextTrimming="CharacterEllipsis"
+                                        ToolTipService.ToolTip="{x:Bind ViewModel.TextoArchivoActual, Mode=OneWay}" />
+                                </StackPanel>
+                                <TextBlock
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="{x:Bind ViewModel.TextoColaHumana, Mode=OneWay}"
+                                    TextWrapping="WrapWholeWords" />
                                 <TextBlock
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                     Text="{x:Bind ViewModel.TextoPolling, Mode=OneWay}" />
@@ -286,17 +370,49 @@
 
                         <Border Style="{StaticResource Tarjeta}">
                             <StackPanel Spacing="10">
-                                <TextBlock FontWeight="SemiBold" Text="Primeros pasos" />
-                                <TextBlock Text="1. Define los pares origen → destino en Sincronización." />
-                                <TextBlock Text="2. Pulsa Guardar para escribir el JSON del perfil." />
-                                <TextBlock Text="3. Pulsa Iniciar para lanzar el demonio." />
-                                <TextBlock Text="4. Sigue el progreso en Monitor y Registro." />
-                                <TextBlock Text="5. Consulta la Guía para documentación completa." />
-                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                                <TextBlock FontWeight="SemiBold" Text="Origen y destino" />
+                                <TextBlock
+                                    Text="{x:Bind ViewModel.TextoDashboardOrigenDestino, Mode=OneWay}"
+                                    TextWrapping="WrapWholeWords"
+                                    IsTextSelectionEnabled="True" />
+                                <Grid ColumnSpacing="12" RowSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Spacing="4">
+                                        <TextBlock Style="{StaticResource EtiquetaMetrica}" Text="Última actividad" />
+                                        <TextBlock Text="{x:Bind ViewModel.TextoUltimaSyncCorrecta, Mode=OneWay}" TextWrapping="WrapWholeWords" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="4">
+                                        <TextBlock Style="{StaticResource EtiquetaMetrica}" Text="Errores / copiados" />
+                                        <TextBlock Text="{x:Bind ViewModel.TextoErroresResumen, Mode=OneWay}" />
+                                        <TextBlock Text="{x:Bind ViewModel.TextoArchivosCopiadosSesion, Mode=OneWay}" />
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Tarjeta}">
+                            <StackPanel Spacing="10">
+                                <TextBlock FontWeight="SemiBold" Text="Acciones rápidas" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button Command="{x:Bind ViewModel.AbrirAsistenteOnboardingCommand}" Content="Asistente de configuración" />
+                                    <Button Command="{x:Bind ViewModel.AnalizarCambiosCommand}" Content="Analizar cambios" />
                                     <Button Click="IrASincronizacion_Click" Content="Ir a sincronización" />
                                     <Button Click="IrAMonitor_Click" Content="Ver monitor" />
                                     <Button Click="IrAGuia_Click" Content="Abrir guía" />
                                 </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Tarjeta}">
+                            <StackPanel Spacing="10">
+                                <TextBlock FontWeight="SemiBold" Text="Primeros pasos" />
+                                <TextBlock Text="1. Define carpetas origen y destino en Sincronización." />
+                                <TextBlock Text="2. Pulsa Analizar cambios para ver qué se copiaría sin modificar nada." />
+                                <TextBlock Text="3. Guarda el perfil y pulsa Iniciar." />
+                                <TextBlock Text="4. Sigue el progreso aquí, en Monitor y en Registro." />
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -352,12 +468,12 @@
                                 <TextBlock
                                     HorizontalAlignment="Center"
                                     FontWeight="SemiBold"
-                                    Text="No hay pares de sincronización" />
+                                    Text="Todavía no tienes pares de sincronización" />
                                 <TextBlock
                                     HorizontalAlignment="Center"
-                                    MaxWidth="360"
+                                    MaxWidth="420"
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    Text="Crea tu primer par con el botón de abajo. Luego Guardar e Iniciar."
+                                    Text="Crea un perfil para copiar automáticamente archivos desde una carpeta origen hacia una carpeta destino."
                                     TextAlignment="Center"
                                     TextWrapping="WrapWholeWords" />
                                 <Button
@@ -366,7 +482,7 @@
                                     Command="{x:Bind ViewModel.AnadirParCommand}">
                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                         <SymbolIcon Symbol="Add" />
-                                        <TextBlock Text="Crear primer par" VerticalAlignment="Center" />
+                                        <TextBlock Text="Crear mi primer par" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>
                             </StackPanel>
@@ -409,11 +525,58 @@
                                                                     Text="{x:Bind EtiquetaEstadoActividad, Mode=OneWay}" />
                                                             </Border>
                                                         </StackPanel>
-                                                        <TextBlock
-                                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                            Text="{x:Bind ResumenRutas, Mode=OneWay}"
-                                                            TextTrimming="CharacterEllipsis"
-                                                            ToolTipService.ToolTip="{x:Bind ResumenRutas, Mode=OneWay}" />
+                                                        <StackPanel Spacing="6" Margin="0,4,0,0">
+                                                            <Border
+                                                                Background="{StaticResource OrigenFondoBrush}"
+                                                                BorderBrush="{StaticResource OrigenAcentoBrush}"
+                                                                BorderThickness="0,0,0,2"
+                                                                CornerRadius="4"
+                                                                Padding="8,6">
+                                                                <StackPanel Spacing="2">
+                                                                    <TextBlock
+                                                                        FontSize="11"
+                                                                        FontWeight="SemiBold"
+                                                                        Foreground="{StaticResource OrigenAcentoBrush}"
+                                                                        Text="Origen" />
+                                                                    <TextBlock
+                                                                        FontSize="12"
+                                                                        Text="{x:Bind RutaOrigen, Mode=OneWay}"
+                                                                        TextTrimming="CharacterEllipsis"
+                                                                        ToolTipService.ToolTip="{x:Bind RutaOrigen, Mode=OneWay}" />
+                                                                </StackPanel>
+                                                            </Border>
+                                                            <FontIcon
+                                                                HorizontalAlignment="Center"
+                                                                FontSize="12"
+                                                                Glyph="&#xE74B;"
+                                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                            <Border
+                                                                Background="{StaticResource DestinoFondoBrush}"
+                                                                BorderBrush="{StaticResource DestinoAcentoBrush}"
+                                                                BorderThickness="0,0,0,2"
+                                                                CornerRadius="4"
+                                                                Padding="8,6">
+                                                                <StackPanel Spacing="2">
+                                                                    <TextBlock
+                                                                        FontSize="11"
+                                                                        FontWeight="SemiBold"
+                                                                        Foreground="{StaticResource DestinoAcentoBrush}"
+                                                                        Text="Destino" />
+                                                                    <TextBlock
+                                                                        FontSize="12"
+                                                                        Text="{x:Bind RutaDestino, Mode=OneWay}"
+                                                                        TextTrimming="CharacterEllipsis"
+                                                                        ToolTipService.ToolTip="{x:Bind RutaDestino, Mode=OneWay}" />
+                                                                </StackPanel>
+                                                            </Border>
+                                                        </StackPanel>
+                                                        <InfoBar
+                                                            Margin="0,4,0,0"
+                                                            IsClosable="False"
+                                                            IsOpen="{x:Bind TieneAvisosRiesgo, Mode=OneWay}"
+                                                            Message="{x:Bind TextoPrimerAviso, Mode=OneWay}"
+                                                            Severity="Warning"
+                                                            Title="Aviso de configuración" />
                                                     </StackPanel>
                                                     <StackPanel
                                                         Grid.Column="1"
@@ -449,16 +612,30 @@
                                                 <StackPanel
                                                     Spacing="8"
                                                     Visibility="{x:Bind Expandido, Mode=OneWay, Converter={StaticResource BoolAVis}}">
-                                                    <TextBlock FontWeight="SemiBold" Text="Origen" />
-                                                    <TextBlock
-                                                        IsTextSelectionEnabled="True"
-                                                        Text="{x:Bind RutaOrigen, Mode=OneWay}"
-                                                        TextWrapping="WrapWholeWords" />
-                                                    <TextBlock FontWeight="SemiBold" Text="Destino" />
-                                                    <TextBlock
-                                                        IsTextSelectionEnabled="True"
-                                                        Text="{x:Bind RutaDestino, Mode=OneWay}"
-                                                        TextWrapping="WrapWholeWords" />
+                                                    <Border
+                                                        Background="{StaticResource OrigenFondoBrush}"
+                                                        CornerRadius="4"
+                                                        Padding="10,8">
+                                                        <StackPanel Spacing="4">
+                                                            <TextBlock FontWeight="SemiBold" Foreground="{StaticResource OrigenAcentoBrush}" Text="Carpeta origen" />
+                                                            <TextBlock
+                                                                IsTextSelectionEnabled="True"
+                                                                Text="{x:Bind RutaOrigen, Mode=OneWay}"
+                                                                TextWrapping="WrapWholeWords" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                    <Border
+                                                        Background="{StaticResource DestinoFondoBrush}"
+                                                        CornerRadius="4"
+                                                        Padding="10,8">
+                                                        <StackPanel Spacing="4">
+                                                            <TextBlock FontWeight="SemiBold" Foreground="{StaticResource DestinoAcentoBrush}" Text="Carpeta destino" />
+                                                            <TextBlock
+                                                                IsTextSelectionEnabled="True"
+                                                                Text="{x:Bind RutaDestino, Mode=OneWay}"
+                                                                TextWrapping="WrapWholeWords" />
+                                                        </StackPanel>
+                                                    </Border>
                                                     <Grid ColumnSpacing="16">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="*" />
@@ -729,6 +906,8 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
                     <StackPanel Grid.Row="0" Spacing="4">
@@ -770,11 +949,101 @@
                             QueryIcon="Find"
                             Text="{x:Bind ViewModel.TextoBusquedaRegistro, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     </Grid>
-                    <Border Grid.Row="2" Style="{StaticResource Tarjeta}" Padding="0">
-                        <ListView
-                            x:Name="ListaRegistro"
-                            ItemsSource="{x:Bind ViewModel.LineasRegistro, Mode=OneWay}"
-                            SelectionMode="None">
+                    <Grid Grid.Row="2" ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel
+                            Grid.Column="0"
+                            Orientation="Horizontal"
+                            Spacing="8">
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Filtro rápido:" />
+                            <Button
+                                Command="{x:Bind ViewModel.AplicarFiltroRegistroRapidoCommand}"
+                                CommandParameter=""
+                                Content="Todos"
+                                ToolTipService.ToolTip="Mostrar todos los niveles" />
+                            <Button
+                                Command="{x:Bind ViewModel.AplicarFiltroRegistroRapidoCommand}"
+                                CommandParameter="ERROR"
+                                Content="Errores"
+                                ToolTipService.ToolTip="Solo líneas ERROR" />
+                            <Button
+                                Command="{x:Bind ViewModel.AplicarFiltroRegistroRapidoCommand}"
+                                CommandParameter="WARN"
+                                Content="Advertencias"
+                                ToolTipService.ToolTip="Solo líneas WARN" />
+                            <Button
+                                Command="{x:Bind ViewModel.AplicarFiltroRegistroRapidoCommand}"
+                                CommandParameter="INFO"
+                                Content="Info"
+                                ToolTipService.ToolTip="Solo líneas INFO" />
+                            <Button
+                                Command="{x:Bind ViewModel.AplicarFiltroRegistroRapidoCommand}"
+                                CommandParameter="PENDIENTE"
+                                Content="Pendiente"
+                                ToolTipService.ToolTip="Solo líneas PENDIENTE" />
+                        </StackPanel>
+                        <StackPanel
+                            Grid.Column="1"
+                            Orientation="Horizontal"
+                            Spacing="8">
+                            <Button
+                                Command="{x:Bind ViewModel.ExportarRegistroCommand}"
+                                ToolTipService.ToolTip="Guarda las líneas visibles en Descargas">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <SymbolIcon Symbol="Save" />
+                                    <TextBlock Text="Exportar registro" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button
+                                Command="{x:Bind ViewModel.ExportarDiagnosticoCommand}"
+                                ToolTipService.ToolTip="Paquete de diagnóstico para soporte">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <SymbolIcon Symbol="Download" />
+                                    <TextBlock Text="Exportar diagnóstico" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock
+                        Grid.Row="3"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="{x:Bind ViewModel.TextoResumenRegistroFiltrado, Mode=OneWay}" />
+                    <Border Grid.Row="4" Style="{StaticResource Tarjeta}" Padding="0">
+                        <Grid>
+                            <StackPanel
+                                Padding="32,48"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Spacing="12"
+                                Visibility="{x:Bind ViewModel.MostrarEstadoVacioRegistro, Mode=OneWay, Converter={StaticResource BoolAVis}}">
+                                <FontIcon
+                                    HorizontalAlignment="Center"
+                                    FontSize="40"
+                                    Glyph="&#xE8A5;"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    FontWeight="SemiBold"
+                                    Text="Aún no hay actividad registrada" />
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    MaxWidth="420"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="Los eventos aparecerán aquí cuando ejecutes una sincronización o pulses Iniciar."
+                                    TextAlignment="Center"
+                                    TextWrapping="WrapWholeWords" />
+                            </StackPanel>
+                            <ListView
+                                x:Name="ListaRegistro"
+                                ItemsSource="{x:Bind ViewModel.LineasRegistro, Mode=OneWay}"
+                                SelectionMode="None"
+                                Visibility="{x:Bind ViewModel.MostrarEstadoVacioRegistro, Mode=OneWay, Converter={StaticResource BoolAVis}, ConverterParameter=Invertir}">
                             <ListView.ItemTemplate>
                                 <DataTemplate x:DataType="models:LineaRegistroViewModel">
                                     <Grid
@@ -809,17 +1078,17 @@
                                             Text="{Binding Nivel}" />
                                         <TextBlock
                                             Grid.Column="3"
-                                            FontFamily="Consolas"
                                             FontSize="12"
                                             Foreground="{Binding Nivel, Converter={StaticResource NivelRegistroBrush}, ConverterParameter=Mensaje}"
                                             IsTextSelectionEnabled="True"
-                                            Text="{Binding Mensaje}"
+                                            Text="{Binding MensajeLegible}"
                                             TextTrimming="CharacterEllipsis"
                                             ToolTipService.ToolTip="{Binding TextoCompleto}" />
                                     </Grid>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>
+                        </Grid>
                     </Border>
                 </Grid>
 
@@ -1073,6 +1342,69 @@
                                 </StackPanel>
                             </Border>
                         </StackPanel>
+
+                        <StackPanel Spacing="6">
+                            <TextBlock Style="{StaticResource EtiquetaGrupo}" Text="Historial de sesiones" />
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Últimas ejecuciones del demonio en este perfil (se guardan al detener)."
+                                TextWrapping="WrapWholeWords" />
+                            <Border Style="{StaticResource Tarjeta}" Padding="0">
+                                <StackPanel>
+                                    <StackPanel
+                                        Padding="32,24"
+                                        HorizontalAlignment="Center"
+                                        Spacing="8"
+                                        Visibility="{x:Bind ViewModel.MostrarHistorialSesionesVacio, Mode=OneWay, Converter={StaticResource BoolAVis}}">
+                                        <TextBlock
+                                            HorizontalAlignment="Center"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Text="Aún no hay sesiones registradas"
+                                            TextAlignment="Center" />
+                                    </StackPanel>
+                                    <ListView
+                                        ItemsSource="{x:Bind ViewModel.HistorialSesiones, Mode=OneWay}"
+                                        IsHitTestVisible="False"
+                                        SelectionMode="None"
+                                        Visibility="{x:Bind ViewModel.MostrarHistorialSesionesVacio, Mode=OneWay, Converter={StaticResource BoolAVis}, ConverterParameter=Invertir}">
+                                        <ListView.ItemTemplate>
+                                            <DataTemplate x:DataType="models:HistorialSesionViewModel">
+                                                <Grid ColumnSpacing="12" Padding="12,8">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="160" />
+                                                        <ColumnDefinition Width="80" />
+                                                        <ColumnDefinition Width="100" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock
+                                                        Grid.Column="0"
+                                                        Style="{StaticResource CeldaFila}"
+                                                        Text="{Binding TextoInicio}" />
+                                                    <TextBlock
+                                                        Grid.Column="1"
+                                                        Style="{StaticResource CeldaFila}"
+                                                        Text="{Binding TextoDuracion}" />
+                                                    <Border
+                                                        Grid.Column="2"
+                                                        Style="{StaticResource ChipEstado}"
+                                                        Background="{Binding ClaveEstado, Converter={StaticResource EstadoParBrush}, ConverterParameter=Fondo}">
+                                                        <TextBlock
+                                                            FontSize="12"
+                                                            FontWeight="SemiBold"
+                                                            Foreground="{Binding ClaveEstado, Converter={StaticResource EstadoParBrush}, ConverterParameter=Texto}"
+                                                            Text="{Binding TextoEstado}" />
+                                                    </Border>
+                                                    <TextBlock
+                                                        Grid.Column="3"
+                                                        Style="{StaticResource CeldaFila}"
+                                                        Text="{Binding TextoResumen}" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListView.ItemTemplate>
+                                    </ListView>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
 
@@ -1086,7 +1418,11 @@
                             <TextBlock Style="{StaticResource TituloSeccion}" Text="Guía de referencia" />
                             <TextBlock
                                 Style="{StaticResource SubtituloSeccion}"
-                                Text="Documentación completa para usar SManager 2.0. Expande cada apartado; el texto es seleccionable para copiar." />
+                                Text="Empieza por «Guía rápida» y «¿Qué NO hace?». Expande cada apartado; el texto es seleccionable." />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Click="IrAInicioAsistente_Click" Content="Abrir asistente" />
+                            <Button Click="IrASincronizacion_Click" Content="Ir a sincronización" />
                         </StackPanel>
                         <ItemsRepeater ItemsSource="{x:Bind ViewModel.SeccionesGuia, Mode=OneWay}">
                             <ItemsRepeater.Layout>
@@ -1143,6 +1479,80 @@
 
                         <Border Style="{StaticResource Tarjeta}">
                             <StackPanel Spacing="14">
+                                <TextBlock Style="{StaticResource EtiquetaGrupo}" Text="Ayuda y primer uso" />
+                                <ToggleSwitch
+                                    Header="Mostrar consejos contextuales"
+                                    IsOn="{x:Bind ViewModel.MostrarConsejosContextuales, Mode=TwoWay}"
+                                    OffContent="No"
+                                    OnContent="Sí" />
+                                <Button
+                                    HorizontalAlignment="Left"
+                                    Command="{x:Bind ViewModel.AbrirAsistenteOnboardingCommand}"
+                                    Content="Abrir asistente de configuración" />
+                                <Button
+                                    HorizontalAlignment="Left"
+                                    Click="RestablecerConsejos_Click"
+                                    Content="Volver a mostrar consejos" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Tarjeta}">
+                            <StackPanel Spacing="14">
+                                <TextBlock Style="{StaticResource EtiquetaGrupo}" Text="Bandeja y notificaciones" />
+                                <TextBlock
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="Mantén SManager activo en segundo plano. Al cerrar la ventana puedes ocultarla en la bandeja del sistema en lugar de salir."
+                                    TextWrapping="WrapWholeWords" />
+                                <ToggleSwitch
+                                    Header="Icono en la bandeja del sistema"
+                                    IsOn="{x:Bind ViewModel.BandejaHabilitada, Mode=TwoWay}"
+                                    OffContent="No"
+                                    OnContent="Sí" />
+                                <ToggleSwitch
+                                    Header="Minimizar a la bandeja al cerrar la ventana"
+                                    IsEnabled="{x:Bind ViewModel.BandejaHabilitada, Mode=OneWay}"
+                                    IsOn="{x:Bind ViewModel.MinimizarABandejaAlCerrar, Mode=TwoWay}"
+                                    OffContent="Salir"
+                                    OnContent="Ocultar" />
+                                <ToggleSwitch
+                                    Header="Notificaciones de Windows"
+                                    IsOn="{x:Bind ViewModel.NotificacionesHabilitadas, Mode=TwoWay}"
+                                    OffContent="No"
+                                    OnContent="Sí" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Tarjeta}">
+                            <StackPanel Spacing="14">
+                                <TextBlock Style="{StaticResource EtiquetaGrupo}" Text="Interfaz" />
+                                <TextBlock
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="Modo básico oculta Monitor, Registro y Estadísticas. El tema claro/oscuro puede seguir al sistema o fijarse manualmente."
+                                    TextWrapping="WrapWholeWords" />
+                                <ToggleSwitch
+                                    Header="Modo avanzado"
+                                    IsOn="{x:Bind ViewModel.ModoInterfazAvanzado, Mode=TwoWay}"
+                                    OffContent="Básico"
+                                    OnContent="Avanzado" />
+                                <ComboBox
+                                    Header="Tema de la aplicación"
+                                    HorizontalAlignment="Stretch"
+                                    ItemsSource="{x:Bind ViewModel.OpcionesTema, Mode=OneWay}"
+                                    SelectedItem="{x:Bind ViewModel.TemaAplicacion, Mode=TwoWay}" />
+                                <ComboBox
+                                    Header="Idioma"
+                                    HorizontalAlignment="Stretch"
+                                    IsEnabled="False"
+                                    ItemsSource="{x:Bind ViewModel.OpcionesIdioma, Mode=OneWay}"
+                                    SelectedItem="{x:Bind ViewModel.IdiomaUiEtiqueta, Mode=TwoWay}"
+                                    ToolTipService.ToolTip="Más idiomas en futuras versiones" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border
+                            Style="{StaticResource Tarjeta}"
+                            Visibility="{x:Bind ViewModel.ModoInterfazAvanzado, Mode=OneWay, Converter={StaticResource BoolAVis}}">
+                            <StackPanel Spacing="14">
                                 <TextBlock Style="{StaticResource EtiquetaGrupo}" Margin="0,0,0,0" Text="Vigilancia" />
                                 <NumberBox Header="Polling de seguridad (segundos)" Minimum="30" Maximum="3600" SpinButtonPlacementMode="Inline"
                                            Value="{x:Bind ViewModel.IntervaloPollingSegundos, Mode=TwoWay}"
@@ -1153,7 +1563,9 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Style="{StaticResource Tarjeta}">
+                        <Border
+                            Style="{StaticResource Tarjeta}"
+                            Visibility="{x:Bind ViewModel.ModoInterfazAvanzado, Mode=OneWay, Converter={StaticResource BoolAVis}}">
                             <StackPanel Spacing="14">
                                 <TextBlock Style="{StaticResource EtiquetaGrupo}" Margin="0,0,0,0" Text="Rendimiento" />
                                 <NumberBox Header="Copiadores en paralelo" Minimum="1" Maximum="32" SpinButtonPlacementMode="Inline"
@@ -1171,7 +1583,9 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Style="{StaticResource Tarjeta}">
+                        <Border
+                            Style="{StaticResource Tarjeta}"
+                            Visibility="{x:Bind ViewModel.ModoInterfazAvanzado, Mode=OneWay, Converter={StaticResource BoolAVis}}">
                             <StackPanel Spacing="14">
                                 <TextBlock Style="{StaticResource EtiquetaGrupo}" Text="Archivo de configuración" />
                                 <TextBlock
@@ -1244,6 +1658,34 @@
                 </ScrollViewer>
 
             </Grid>
+
+            <Grid
+                Grid.RowSpan="3"
+                Background="#B3000000"
+                Visibility="{x:Bind ViewModel.MostrarAsistenteOnboarding, Mode=OneWay, Converter={StaticResource BoolAVis}}">
+                <vistas:AsistenteOnboardingControl
+                    x:Name="ControlAsistente"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Margin="24" />
+            </Grid>
         </Grid>
     </NavigationView>
+
+        <TeachingTip
+            x:Name="ConsejoIniciar"
+            Title="Iniciar sincronización"
+            Subtitle="Cuando tengas al menos un par activo, pulsa Iniciar. SManager copiará desde origen hacia destino y seguirá vigilando cambios."
+            Target="{x:Bind BotonIniciarSync}"
+            IsOpen="{x:Bind ViewModel.ConsejoIniciarAbierto, Mode=TwoWay}"
+            CloseButtonClick="ConsejoIniciar_Cerrado" />
+
+        <TeachingTip
+            x:Name="ConsejoAnalizar"
+            Title="Analizar antes de copiar"
+            Subtitle="Compara origen y destino sin modificar archivos. Ideal la primera vez o antes de una copia grande."
+            Target="{x:Bind BotonAnalizarCambios}"
+            IsOpen="{x:Bind ViewModel.ConsejoAnalizarAbierto, Mode=TwoWay}"
+            CloseButtonClick="ConsejoAnalizar_Cerrado" />
+    </Grid>
 </Page>

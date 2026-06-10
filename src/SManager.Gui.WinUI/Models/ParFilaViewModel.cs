@@ -1,5 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using SManager.Core.Modelos;
+using SManager.Gui.Shared.Servicios;
 
 namespace SManager.Gui.WinUI.Models;
 
@@ -35,6 +37,15 @@ public partial class ParFilaViewModel : ObservableObject
     public int TotalCopiados { get; set; }
 
     public int TotalErrores { get; set; }
+
+    /// <summary>True si hay avisos de riesgo en la configuración del par.</summary>
+    public bool TieneAvisosRiesgo => AvisosRiesgo.Count > 0;
+
+    /// <summary>Avisos preventivos (origen=destino, destino dentro de origen, etc.).</summary>
+    public IReadOnlyList<string> AvisosRiesgo { get; private set; } = [];
+
+    /// <summary>Primer aviso para mostrar en tarjeta compacta.</summary>
+    public string TextoPrimerAviso => AvisosRiesgo.FirstOrDefault() ?? string.Empty;
 
     /// <summary>Resumen corto origen → destino para la cabecera de la tarjeta.</summary>
     public string ResumenRutas
@@ -73,12 +84,38 @@ public partial class ParFilaViewModel : ObservableObject
 
     partial void OnPausadoChanged(bool value) => NotificarEstadoActividad();
 
+    partial void OnFiltroInclusionChanged(string value) => ActualizarAvisosRiesgo();
+
+    partial void OnFiltroExclusionChanged(string value) => ActualizarAvisosRiesgo();
+
     [RelayCommand]
     private void AlternarExpansion() => Expandido = !Expandido;
+
+    /// <summary>Recalcula avisos cuando cambian rutas o filtros.</summary>
+    public void ActualizarAvisosRiesgo()
+    {
+        AvisosRiesgo = ServicioValidacionRiesgoPar.DetectarAvisos(ComoModeloCore());
+        OnPropertyChanged(nameof(AvisosRiesgo));
+        OnPropertyChanged(nameof(TieneAvisosRiesgo));
+        OnPropertyChanged(nameof(TextoPrimerAviso));
+    }
+
+    private ParSincronizacion ComoModeloCore() => new()
+    {
+        IdPar = IdPar,
+        Nombre = Nombre,
+        Habilitado = Habilitado,
+        Pausado = Pausado,
+        RutaOrigen = RutaOrigen,
+        RutaDestino = RutaDestino,
+        FiltroInclusion = FiltroInclusion,
+        FiltroExclusion = FiltroExclusion
+    };
 
     private void NotificarResumen()
     {
         OnPropertyChanged(nameof(ResumenRutas));
+        ActualizarAvisosRiesgo();
     }
 
     private void NotificarEstadoActividad()

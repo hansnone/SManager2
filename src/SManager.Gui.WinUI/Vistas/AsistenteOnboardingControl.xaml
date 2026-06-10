@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="SManager.Gui.WinUI.Vistas.AsistenteOnboardingControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="using:SManager.Gui.WinUI.Models"
+    xmlns:conv="using:SManager.Gui.WinUI.Convertidores"
+    mc:Ignorable="d"
+    MinWidth="520"
+    MaxWidth="640">
+
+    <UserControl.Resources>
+        <conv:BooleanoAVisibilidadConvertidor x:Key="BoolAVis" />
+        <conv:PasoAsistenteVisibilidadConvertidor x:Key="PasoAsistenteVis" />
+        <conv:TextoNoVacioAVisibilidadConvertidor x:Key="TextoNoVacioAVis" />
+    </UserControl.Resources>
+
+    <Border
+        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+        BorderThickness="1"
+        CornerRadius="12"
+        Padding="24">
+        <Grid RowSpacing="16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0" Spacing="6">
+                <TextBlock
+                    FontSize="22"
+                    FontWeight="SemiBold"
+                    Text="{x:Bind ViewModel.TituloPaso, Mode=OneWay}" />
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind ViewModel.SubtituloPaso, Mode=OneWay}"
+                    TextWrapping="WrapWholeWords" />
+                <TextBlock
+                    FontSize="12"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind ViewModel.TextoIndicadorPaso, Mode=OneWay}" />
+            </StackPanel>
+
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="14">
+                    <StackPanel
+                        Spacing="10"
+                        Visibility="{x:Bind ViewModel.PasoActual, Mode=OneWay, Converter={StaticResource PasoAsistenteVis}, ConverterParameter=Bienvenida}">
+                        <Border Background="{StaticResource OrigenFondoBrush}" CornerRadius="8" Padding="12">
+                            <StackPanel Spacing="4">
+                                <TextBlock FontWeight="SemiBold" Foreground="{StaticResource OrigenAcentoBrush}" Text="Origen" />
+                                <TextBlock Text="La carpeta que vigila SManager (fotos, documentos, proyecto…)." TextWrapping="WrapWholeWords" />
+                            </StackPanel>
+                        </Border>
+                        <FontIcon HorizontalAlignment="Center" Glyph="&#xE74B;" />
+                        <Border Background="{StaticResource DestinoFondoBrush}" CornerRadius="8" Padding="12">
+                            <StackPanel Spacing="4">
+                                <TextBlock FontWeight="SemiBold" Foreground="{StaticResource DestinoAcentoBrush}" Text="Destino" />
+                                <TextBlock Text="Donde se guarda la copia (disco externo, NAS, otra carpeta…)." TextWrapping="WrapWholeWords" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <ItemsRepeater
+                        Visibility="{x:Bind ViewModel.PasoActual, Mode=OneWay, Converter={StaticResource PasoAsistenteVis}, ConverterParameter=Plantilla}"
+                        ItemsSource="{x:Bind ViewModel.Plantillas, Mode=OneWay}">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Orientation="Vertical" Spacing="8" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="models:PlantillaParEjemplo">
+                                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Click="Plantilla_Click" Tag="{x:Bind Id}">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock FontWeight="SemiBold" Text="{x:Bind Titulo}" />
+                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{x:Bind Descripcion}" TextWrapping="WrapWholeWords" />
+                                    </StackPanel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+
+                    <StackPanel
+                        Spacing="10"
+                        Visibility="{x:Bind ViewModel.PasoActual, Mode=OneWay, Converter={StaticResource PasoAsistenteVis}, ConverterParameter=Origen}">
+                        <Button HorizontalAlignment="Left" Command="{x:Bind ViewModel.ElegirOrigenCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <SymbolIcon Symbol="Folder" />
+                                <TextBlock Text="Elegir carpeta origen" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <TextBox Header="Ruta de origen" IsReadOnly="True" Text="{x:Bind ViewModel.RutaOrigen, Mode=TwoWay}" />
+                    </StackPanel>
+
+                    <StackPanel
+                        Spacing="10"
+                        Visibility="{x:Bind ViewModel.PasoActual, Mode=OneWay, Converter={StaticResource PasoAsistenteVis}, ConverterParameter=Destino}">
+                        <Button HorizontalAlignment="Left" Command="{x:Bind ViewModel.ElegirDestinoCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <SymbolIcon Symbol="Folder" />
+                                <TextBlock Text="Elegir carpeta destino" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <TextBox Header="Ruta de destino" IsReadOnly="True" Text="{x:Bind ViewModel.RutaDestino, Mode=TwoWay}" />
+                        <InfoBar
+                            IsClosable="False"
+                            IsOpen="{x:Bind ViewModel.TextoAvisosRiesgo, Mode=OneWay, Converter={StaticResource TextoNoVacioAVis}}"
+                            Message="{x:Bind ViewModel.TextoAvisosRiesgo, Mode=OneWay}"
+                            Severity="Warning"
+                            Title="Revisa esta configuración" />
+                    </StackPanel>
+
+                    <StackPanel
+                        Spacing="12"
+                        Visibility="{x:Bind ViewModel.PasoActual, Mode=OneWay, Converter={StaticResource PasoAsistenteVis}, ConverterParameter=Comportamiento}">
+                        <ToggleSwitch Header="Omitir archivos temporales" IsOn="{x:Bind ViewModel.ExcluirTemporales, Mode=TwoWay}" />
+                        <TextBox Header="Copiar solo archivos que coincidan con" Text="{x:Bind ViewModel.FiltroInclusion, Mode=TwoWay}" />
+                        <TextBox Header="Omitir archivos que coincidan con" Text="{x:Bind ViewModel.FiltroExclusion, Mode=TwoWay}" />
+                    </StackPanel>
+
+                    <StackPanel
+                        Spacing="10"
+                        Visibility="{x:Bind ViewModel.PasoActual, Mode=OneWay, Converter={StaticResource PasoAsistenteVis}, ConverterParameter=VistaPrevia}">
+                        <Button Command="{x:Bind ViewModel.AnalizarVistaPreviaCommand}" Content="Analizar ahora" />
+                        <ProgressRing IsActive="{x:Bind ViewModel.AnalizandoVistaPrevia, Mode=OneWay}" Visibility="{x:Bind ViewModel.AnalizandoVistaPrevia, Mode=OneWay, Converter={StaticResource BoolAVis}}" />
+                        <TextBlock IsTextSelectionEnabled="True" Text="{x:Bind ViewModel.TextoVistaPrevia, Mode=OneWay}" TextWrapping="WrapWholeWords" />
+                    </StackPanel>
+
+                    <StackPanel
+                        Spacing="12"
+                        Visibility="{x:Bind ViewModel.PasoActual, Mode=OneWay, Converter={StaticResource PasoAsistenteVis}, ConverterParameter=Finalizar}">
+                        <TextBox Header="Nombre del par" Text="{x:Bind ViewModel.NombrePar, Mode=TwoWay}" />
+                        <TextBlock IsTextSelectionEnabled="True" Text="{x:Bind ViewModel.ResumenFinal, Mode=OneWay}" TextWrapping="WrapWholeWords" />
+                        <ToggleSwitch Header="Iniciar sincronización al terminar" IsOn="{x:Bind ViewModel.IniciarAlFinalizar, Mode=TwoWay}" />
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+
+            <Grid Grid.Row="2" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <HyperlinkButton Grid.Column="0" Command="{x:Bind ViewModel.OmitirCommand}" Content="Omitir asistente" />
+                <Button Grid.Column="1" Command="{x:Bind ViewModel.AnteriorCommand}" Content="Atrás" IsEnabled="{x:Bind ViewModel.PuedeRetroceder, Mode=OneWay}" />
+                <Button Grid.Column="2" Command="{x:Bind ViewModel.SiguienteCommand}" Content="{x:Bind ViewModel.TextoBotonPrincipal, Mode=OneWay}" Style="{StaticResource AccentButtonStyle}" />
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>

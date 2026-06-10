@@ -9,6 +9,53 @@ public static class ContenidoGuiaApp
     [
         new()
         {
+            Titulo = "Guía rápida (5 minutos)",
+            Cuerpo =
+                "1. Abre el asistente desde Inicio → «Asistente de configuración» (o se muestra solo la primera vez).\n"
+                + "2. Elige plantilla, carpeta origen y carpeta destino.\n"
+                + "3. Pulsa «Analizar cambios» para ver qué se copiaría sin tocar archivos.\n"
+                + "4. Guarda e Inicia la sincronización.\n"
+                + "5. Sigue el progreso en Inicio, Monitor y Registro.\n\n"
+                + "Recuerda: es sincronización unidireccional (origen → destino). No borra en destino lo que desaparezca del origen."
+        },
+        new()
+        {
+            Titulo = "¿Para qué sirve SManager?",
+            Cuerpo =
+                "Mantiene una copia actualizada de una carpeta en otra ubicación: disco externo, NAS, unidad de red o carpeta de backup en el mismo PC.\n\n"
+                + "Casos habituales:\n"
+                + "• Copiar fotos a un disco USB.\n"
+                + "• Replicar documentos de trabajo en un servidor.\n"
+                + "• Mantener una carpeta de proyecto en un segundo disco.\n"
+                + "• Automatizar copias con la CLI (smanager.exe)."
+        },
+        new()
+        {
+            Titulo = "¿Qué NO hace SManager?",
+            Cuerpo =
+                "• No es sincronización bidireccional (no fusiona dos carpetas activas).\n"
+                + "• No es almacenamiento en la nube por sí solo (copia hacia rutas que tú defines).\n"
+                + "• No resuelve conflictos entre dos copias editadas a la vez.\n"
+                + "• No sustituye un backup con versionado histórico (salvo que guardes varias copias manualmente).\n"
+                + "• No elimina en destino archivos que ya no existan en origen."
+        },
+        new()
+        {
+            Titulo = "Preguntas frecuentes",
+            Cuerpo =
+                "¿Puedo probar sin copiar nada?\n"
+                + "→ Sí. Usa «Analizar cambios» en la barra superior o en Inicio.\n\n"
+                + "¿Qué pasa si el destino ya tiene archivos?\n"
+                + "→ Los archivos con el mismo nombre y ruta relativa pueden sobrescribirse si el origen es más reciente.\n\n"
+                + "¿Puedo pausar un par?\n"
+                + "→ Sí, en Sincronización → Editar par → Pausado.\n\n"
+                + "¿Cómo sé si algo falló?\n"
+                + "→ Revisa Registro (filtro ERROR) y el panel de errores en Inicio.\n\n"
+                + "¿Dónde están mis datos?\n"
+                + "→ %LOCALAPPDATA%\\SManager2\\"
+        },
+        new()
+        {
             Titulo = "1. ¿Qué es SManager 2.0?",
             Cuerpo =
                 "SManager 2.0 sincroniza archivos en una sola dirección: desde una carpeta origen hacia una carpeta destino. "
@@ -32,11 +79,17 @@ public static class ContenidoGuiaApp
         {
             Titulo = "3. Primeros pasos (flujo recomendado)",
             Cuerpo =
-                "1. En el panel lateral, elige o crea un perfil.\n"
+                "Opción A — Asistente (recomendado la primera vez):\n"
+                + "1. Inicio → «Asistente de configuración».\n"
+                + "2. Sigue los pasos: plantilla, origen, destino, vista previa.\n"
+                + "3. Crea el par y opcionalmente inicia la sincronización.\n\n"
+                + "Opción B — Manual:\n"
+                + "1. En el panel lateral, elige o crea un perfil.\n"
                 + "2. Ve a Sincronización → Nuevo par → define origen, destino y filtros.\n"
-                + "3. Pulsa Guardar (o Ctrl+S). La ruta del JSON aparece en la barra superior.\n"
-                + "4. Pulsa Iniciar. El indicador pasa a «Sincronizando» (verde).\n"
-                + "5. Revisa Monitor, Registro y Estadísticas.\n\n"
+                + "3. Pulsa «Analizar cambios» si quieres una vista previa.\n"
+                + "4. Pulsa Guardar (o Ctrl+S). La ruta del JSON aparece en la barra superior.\n"
+                + "5. Pulsa Iniciar. El indicador pasa a «Sincronizando» (verde).\n"
+                + "6. Revisa Monitor, Registro y Estadísticas.\n\n"
                 + "Requisitos para Iniciar:\n"
                 + "• Al menos un par habilitado (activo).\n"
                 + "• Rutas de origen y destino existentes y accesibles.\n"
@@ -49,7 +102,8 @@ public static class ContenidoGuiaApp
                 "Iniciar: lanza el demonio del perfil activo (guarda antes).\n"
                 + "Detener: apagado ordenado del demonio.\n"
                 + "Recargar (F5): relee el JSON en disco sin reiniciar el proceso (solo con demonio activo).\n"
-                + "Guardar (Ctrl+S): escribe la configuración actual en el JSON del perfil.\n\n"
+                + "Guardar (Ctrl+S): escribe la configuración actual en el JSON del perfil.\n"
+                + "Analizar cambios: compara origen y destino sin copiar archivos (vista previa).\n\n"
                 + "Indicador de estado:\n"
                 + "• Rojo «Detenido»: no hay demonio en ejecución.\n"
                 + "• Verde «Sincronizando»: demonio activo.\n"
@@ -118,7 +172,12 @@ public static class ContenidoGuiaApp
                 + "Filtros:\n"
                 + "• Par: todos o un par concreto.\n"
                 + "• Nivel: INFO, WARN, ERROR, PENDIENTE.\n"
-                + "• Buscar: texto libre en el mensaje.\n\n"
+                + "• Buscar: texto libre en el mensaje.\n"
+                + "• Filtro rápido: botones Errores, Advertencias, Info, Pendiente.\n\n"
+                + "Exportar:\n"
+                + "• Exportar registro: guarda las líneas visibles (con filtros) en Descargas.\n"
+                + "• Exportar diagnóstico: paquete con telemetría, rutas y últimas líneas del log.\n\n"
+                + "El resumen bajo los filtros indica cuántas líneas visibles hay y cuántos ERROR/WARN contienen.\n\n"
                 + "El registro se actualiza en vivo con el demonio activo y también se puede leer tras detenerlo. "
                 + "Al cambiar de perfil se carga el log correspondiente."
         },
@@ -138,7 +197,13 @@ public static class ContenidoGuiaApp
         {
             Titulo = "11. Ajustes avanzados",
             Cuerpo =
-                "Vigilancia:\n"
+                "Sistema:\n"
+                + "• Inicio con Windows y abrir minimizado (barra de tareas).\n\n"
+                + "Bandeja y notificaciones:\n"
+                + "• Icono en la bandeja: menú contextual (Abrir, Sincronizar, Detener, Monitor, Salir).\n"
+                + "• Minimizar a la bandeja al cerrar: la X oculta la ventana; el demonio sigue activo.\n"
+                + "• Notificaciones: avisos al iniciar/detener y si acumulas errores.\n\n"
+                + "Vigilancia:\n"
                 + "• Polling de seguridad (s): barrido periódico por si se perdió un evento del sistema.\n"
                 + "• Estabilidad del archivo (s): espera antes de copiar para archivos aún en escritura.\n\n"
                 + "Rendimiento:\n"
@@ -201,8 +266,58 @@ public static class ContenidoGuiaApp
                 + "│   ├── smanager.pid     (PID del demonio)\n"
                 + "│   └── control.json     (comandos pendientes)\n"
                 + "├── preferencias_monitor.json\n"
+                + "├── preferencias_gui.json   (bandeja, notificaciones, onboarding, tema, modo UI)\n"
+                + "├── Perfiles\\<perfil>\\historial_sesiones.json\n"
                 + "└── gui_crash.log        (diagnóstico si la GUI falla)\n\n"
                 + "Preferencias.json (ruta personalizada del JSON) vive en Perfiles\\<perfil>\\ si se configuró."
+        },
+        new()
+        {
+            Titulo = "17. Modo básico y modo avanzado",
+            Cuerpo =
+                "Modo básico (predeterminado para usuarios nuevos):\n"
+                + "• Inicio, Sincronización, Guía y Ajustes esenciales.\n"
+                + "• Oculta Monitor, Registro y Estadísticas del menú lateral.\n"
+                + "• Oculta parámetros de vigilancia, rendimiento y rutas JSON personalizadas.\n\n"
+                + "Modo avanzado:\n"
+                + "• Muestra todas las secciones y ajustes del motor.\n"
+                + "• Actívalo en Ajustes → Interfaz → Modo avanzado.\n\n"
+                + "El dashboard de Inicio sigue mostrando estado, progreso y errores en ambos modos."
+        },
+        new()
+        {
+            Titulo = "18. Tema, accesibilidad e idioma",
+            Cuerpo =
+                "Tema:\n"
+                + "• Ajustes → Interfaz → Tema: Sistema, Claro u Oscuro.\n"
+                + "• Los colores del registro y los chips de estado usan recursos adaptados al tema.\n\n"
+                + "Accesibilidad:\n"
+                + "• El indicador de estado incluye texto descriptivo para lectores de pantalla.\n"
+                + "• Atajos: Ctrl+S Guardar, F5 Recargar, Ctrl+I Iniciar, Ctrl+Shift+S Detener, Ctrl+Shift+A Analizar.\n"
+                + "• Los chips muestran texto (Correcta, Con errores…) además del color.\n\n"
+                + "Idioma:\n"
+                + "• La interfaz está en español. El selector de idioma está preparado para futuras traducciones."
+        },
+        new()
+        {
+            Titulo = "19. Historial de sesiones",
+            Cuerpo =
+                "En Estadísticas (modo avanzado) verás el historial de las últimas sesiones del demonio.\n\n"
+                + "Cada entrada registra al detener:\n"
+                + "• Fecha de inicio\n"
+                + "• Duración\n"
+                + "• Archivos copiados, bytes y errores\n"
+                + "• Si la sesión fue correcta o tuvo errores\n\n"
+                + "El dashboard de Inicio muestra la última sesión completada sin errores cuando el demonio está detenido.\n\n"
+                + "Datos en: Perfiles\\<perfil>\\historial_sesiones.json"
+        },
+        new()
+        {
+            Titulo = "20. Confirmaciones al editar pares",
+            Cuerpo =
+                "Al cambiar la carpeta origen o destino de un par existente, SManager pide confirmación antes de guardar.\n\n"
+                + "Así reduces el riesgo de apuntar accidentalmente a otra ruta en la próxima sincronización.\n\n"
+                + "Otras confirmaciones ya existentes: eliminar par, eliminar perfil, cambios sin guardar al cerrar."
         },
         new()
         {

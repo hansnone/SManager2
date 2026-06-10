@@ -186,9 +186,12 @@ public sealed class MotorSincronizacion : IAsyncDisposable
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error en iteración del bucle principal (perfil {Perfil})", _opciones.NombrePerfil);
-                    _estado?.EncolarLog("__ALL__", "ERROR",
-                        $"Error grave en bucle principal: {ex.Message}. El demonio sigue activo.");
+                    _logger.LogError(
+                        ex,
+                        "Error en iteración del bucle principal (perfil {Perfil}, tipo {TipoExcepcion})",
+                        _opciones.NombrePerfil,
+                        ex.GetType().Name);
+                    _estado?.EncolarLog("__ALL__", "ERROR", FormatearErrorBuclePrincipal(ex));
 
                     try
                     {
@@ -660,6 +663,20 @@ public sealed class MotorSincronizacion : IAsyncDisposable
         {
             await _escritorLog.DisposeAsync().ConfigureAwait(false);
         }
+    }
+
+    private static string FormatearErrorBuclePrincipal(Exception ex)
+    {
+        var mensajeHumano = ServicioMensajesErrorHumano.TraducirExcepcion(ex);
+        var texto =
+            $"Error en el ciclo de control del demonio: {mensajeHumano} El demonio sigue activo e intentará de nuevo.";
+
+        if (ex is UnauthorizedAccessException or IOException)
+        {
+            texto += " Comprueba permisos en %LOCALAPPDATA%\\SManager2.";
+        }
+
+        return texto;
     }
 
     private sealed class ResumenParInterno

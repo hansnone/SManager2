@@ -5,8 +5,9 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="using:SManager.Gui.WinUI.Models"
     mc:Ignorable="d"
-    MinWidth="480">
+    MinWidth="520">
 
     <StackPanel Spacing="14">
         <TextBlock
@@ -28,7 +29,6 @@
                 Header="Carpeta origen"
                 PlaceholderText="Ruta de origen" />
             <Button
-                x:Name="BotonOrigen"
                 Grid.Column="1"
                 Margin="0,24,0,0"
                 VerticalAlignment="Bottom"
@@ -49,7 +49,6 @@
                 Header="Carpeta destino"
                 PlaceholderText="Ruta de destino" />
             <Button
-                x:Name="BotonDestino"
                 Grid.Column="1"
                 Margin="0,24,0,0"
                 VerticalAlignment="Bottom"
@@ -61,14 +60,48 @@
 
         <TextBox
             x:Name="CajaInclusion"
-            Header="Incluir (patrones)"
+            Header="Copiar solo archivos que coincidan con"
             PlaceholderText="*"
-            ToolTipService.ToolTip="Patrones glob separados por ;. * incluye todos los archivos." />
-        <TextBox
-            x:Name="CajaExclusion"
-            Header="Excluir (patrones)"
-            PlaceholderText="*.tmp"
-            ToolTipService.ToolTip="Archivos a ignorar, separados por ;." />
+            ToolTipService.ToolTip="Patrones glob separados por ;. Ejemplo: *.pdf;*.docx" />
+
+        <Expander Header="Omitir archivos (editor visual)" IsExpanded="True">
+            <StackPanel Spacing="10">
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="Patrones glob separados por regla. Ejemplos: *.tmp, ~$*, node_modules"
+                    TextWrapping="WrapWholeWords" />
+                <ListView
+                    x:Name="ListaReglasExclusion"
+                    MaxHeight="180"
+                    SelectionMode="None">
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="models:ReglaFiltroViewModel">
+                            <Grid ColumnSpacing="8" Padding="0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox
+                                    Grid.Column="0"
+                                    PlaceholderText="*.tmp"
+                                    Text="{x:Bind Patron, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <Button Grid.Column="1" Click="BotonEliminarRegla_Click" Tag="{x:Bind}">
+                                    <SymbolIcon Symbol="Delete" />
+                                </Button>
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Click="BotonAnadirRegla_Click" Content="Añadir regla" />
+                    <Button Click="BotonProbarFiltros_Click" Content="Probar filtros" />
+                </StackPanel>
+                <TextBlock
+                    x:Name="TextoResultadoPruebaFiltros"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    TextWrapping="WrapWholeWords" />
+            </StackPanel>
+        </Expander>
 
         <StackPanel Orientation="Horizontal" Spacing="24">
             <ToggleSwitch x:Name="InterruptorActivo" Header="Activo" OnContent="Sí" OffContent="No" />

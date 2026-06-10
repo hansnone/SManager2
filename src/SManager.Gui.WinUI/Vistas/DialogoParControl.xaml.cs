@@ -1,5 +1,7 @@
+using System.Collections.ObjectModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using SManager.Core.Modelos;
 using SManager.Gui.WinUI.Models;
 using SManager.Gui.WinUI.Servicios;
 
@@ -8,6 +10,8 @@ namespace SManager.Gui.WinUI.Vistas;
 /// <summary>Formulario reutilizable para crear o editar un par dentro de un ContentDialog.</summary>
 public sealed partial class DialogoParControl : UserControl
 {
+    private readonly ObservableCollection<ReglaFiltroViewModel> _reglasExclusion = [];
+
     private string _idPar = Guid.NewGuid().ToString();
 
     /// <summary>Notifica al diálogo padre para habilitar o deshabilitar el botón principal.</summary>
@@ -16,6 +20,7 @@ public sealed partial class DialogoParControl : UserControl
     public DialogoParControl()
     {
         InitializeComponent();
+        ListaReglasExclusion.ItemsSource = _reglasExclusion;
         CajaNombre.TextChanged += (_, _) => NotificarValidez();
         CajaOrigen.TextChanged += (_, _) => NotificarValidez();
         CajaDestino.TextChanged += (_, _) => NotificarValidez();
@@ -36,6 +41,8 @@ public sealed partial class DialogoParControl : UserControl
             ? "Modifica las rutas o filtros del par seleccionado."
             : "Define origen, destino y filtros del nuevo par de sincronización.";
 
+        _reglasExclusion.Clear();
+
         if (par is null)
         {
             _idPar = Guid.NewGuid().ToString();
@@ -43,9 +50,14 @@ public sealed partial class DialogoParControl : UserControl
             CajaOrigen.Text = string.Empty;
             CajaDestino.Text = string.Empty;
             CajaInclusion.Text = "*";
-            CajaExclusion.Text = "~$*;*.tmp;*.partial;*.lnk";
+            foreach (var regla in ServicioReglasFiltroVisual.DesdeCadenaExclusion("~$*;*.tmp;*.partial;*.lnk"))
+            {
+                _reglasExclusion.Add(regla);
+            }
+
             InterruptorActivo.IsOn = true;
             InterruptorPausa.IsOn = false;
+            TextoResultadoPruebaFiltros.Text = string.Empty;
             return;
         }
 
@@ -54,9 +66,14 @@ public sealed partial class DialogoParControl : UserControl
         CajaOrigen.Text = par.RutaOrigen;
         CajaDestino.Text = par.RutaDestino;
         CajaInclusion.Text = par.FiltroInclusion;
-        CajaExclusion.Text = par.FiltroExclusion;
+        foreach (var regla in ServicioReglasFiltroVisual.DesdeCadenaExclusion(par.FiltroExclusion))
+        {
+            _reglasExclusion.Add(regla);
+        }
+
         InterruptorActivo.IsOn = par.Habilitado;
         InterruptorPausa.IsOn = par.Pausado;
+        TextoResultadoPruebaFiltros.Text = string.Empty;
     }
 
     /// <summary>Lee los valores actuales del formulario como modelo editable.</summary>
@@ -68,7 +85,7 @@ public sealed partial class DialogoParControl : UserControl
             RutaOrigen = CajaOrigen.Text.Trim(),
             RutaDestino = CajaDestino.Text.Trim(),
             FiltroInclusion = string.IsNullOrWhiteSpace(CajaInclusion.Text) ? "*" : CajaInclusion.Text.Trim(),
-            FiltroExclusion = CajaExclusion.Text.Trim(),
+            FiltroExclusion = ServicioReglasFiltroVisual.HaciaCadenaExclusion(_reglasExclusion),
             Habilitado = InterruptorActivo.IsOn,
             Pausado = InterruptorPausa.IsOn
         };
@@ -89,5 +106,43 @@ public sealed partial class DialogoParControl : UserControl
         {
             CajaDestino.Text = ruta;
         }
+    }
+
+    private void BotonAnadirRegla_Click(object sender, RoutedEventArgs e)
+    {
+        _reglasExclusion.Add(new ReglaFiltroViewModel { Patron = "*.tmp" });
+    }
+
+    private void BotonEliminarRegla_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ReglaFiltroViewModel regla })
+        {
+            _reglasExclusion.Remove(regla);
+        }
+    }
+
+    private async void BotonProbarFiltros_Click(object sender, RoutedEventArgs e)
+    {
+        var carpeta = string.IsNullOrWhiteSpace(CajaOrigen.Text)
+            ? await ServicioSelectorCarpeta.ElegirCarpetaAsync(null)
+            : CajaOrigen.Text.Trim();
+
+        if (string.IsNullOrWhiteSpace(carpeta) || !Directory.Exists(carpeta))
+        {
+            TextoResultadoPruebaFiltros.Text = "Elige una carpeta origen válida para probar los filtros.";
+            return;
+        }
+
+        var par = new ParSincronizacion
+        {
+            FiltroInclusion = string.IsNullOrWhiteSpace(CajaInclusion.Text) ? "*" : CajaInclusion.Text.Trim(),
+            FiltroExclusion = ServicioReglasFiltroVisual.HaciaCadenaExclusion(_reglasExclusion)
+        };
+
+        var resultado = await Task.Run(() => ServicioReglasFiltroVisual.ProbarCarpeta(carpeta, par));
+        TextoResultadoPruebaFiltros.Text =
+            $"Revisados: {resultado.ArchivosRevisados:N0} — "
+            + $"Se copiarían: {resultado.ArchivosCopiados:N0} — "
+            + $"Se omitirían: {resultado.ArchivosOmitidos:N0}";
     }
 }

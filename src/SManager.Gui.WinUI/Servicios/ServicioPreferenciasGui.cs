@@ -9,6 +9,33 @@ public sealed class PreferenciasGuiDto
     public bool AutoInicioHabilitado { get; set; }
 
     public bool AutoInicioMinimizado { get; set; } = true;
+
+    /// <summary>True tras completar u omitir el asistente de primer par.</summary>
+    public bool AsistenteCompletado { get; set; }
+
+    /// <summary>Si es false, no se muestran TeachingTips automáticos.</summary>
+    public bool MostrarConsejosContextuales { get; set; } = true;
+
+    /// <summary>Identificadores de consejos contextuales ya mostrados al usuario.</summary>
+    public List<string> ConsejosVistos { get; set; } = [];
+
+    /// <summary>Al cerrar la ventana, ocultar en la bandeja en lugar de salir.</summary>
+    public bool MinimizarABandejaAlCerrar { get; set; } = true;
+
+    /// <summary>Mostrar toasts cuando cambia el estado de sincronización.</summary>
+    public bool NotificacionesHabilitadas { get; set; } = true;
+
+    /// <summary>Mostrar icono en la bandeja del sistema.</summary>
+    public bool BandejaHabilitada { get; set; } = true;
+
+    /// <summary>Si es false, oculta secciones técnicas (Monitor, Registro, Estadísticas avanzadas).</summary>
+    public bool ModoInterfazAvanzado { get; set; }
+
+    /// <summary>Tema de la GUI: Sistema, Claro u Oscuro.</summary>
+    public string TemaAplicacion { get; set; } = ServicioTemaAplicacion.TemaSistema;
+
+    /// <summary>Código de idioma de la interfaz (preparado para localización futura).</summary>
+    public string IdiomaUi { get; set; } = "es";
 }
 
 /// <summary>Persiste preferencias globales de la GUI en %LOCALAPPDATA%\SManager2.</summary>

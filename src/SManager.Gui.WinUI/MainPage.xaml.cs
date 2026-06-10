@@ -23,6 +23,8 @@ public sealed partial class MainPage : Page
 
     private bool _preferenciasMonitorRestauradas;
 
+    private bool _bandejaSuscrita;
+
     private ArrastradorSeparadorMonitor? _arrastradorSeparadorSuperior;
     private ArrastradorSeparadorMonitor? _arrastradorSeparadorInferior;
 
@@ -31,6 +33,7 @@ public sealed partial class MainPage : Page
         InitializeComponent();
         DataContext = ViewModel;
         ViewModel.RegistroDesplazarAlFinalSolicitado += ViewModel_RegistroDesplazarAlFinalSolicitado;
+        ViewModel.ModoInterfazCambiado += ViewModel_ModoInterfazCambiado;
         Loaded += MainPage_Loaded;
     }
 
@@ -50,6 +53,112 @@ public sealed partial class MainPage : Page
         MostrarSeccion("inicio");
         App.Window.AppWindow.Closing += AppWindow_Closing;
         ConfigurarSeparadoresMonitor();
+        ControlAsistente.EnlazarViewModel(ViewModel.Asistente);
+        SuscribirAccionesBandeja();
+    }
+
+    /// <summary>Conecta el menú de la bandeja con la ventana y los comandos del ViewModel.</summary>
+    private void SuscribirAccionesBandeja()
+    {
+        if (_bandejaSuscrita)
+        {
+            return;
+        }
+
+        ServicioAccionesBandeja.AbrirVentanaSolicitado += Bandeja_AbrirVentanaSolicitada;
+        ServicioAccionesBandeja.IniciarSincronizacionSolicitado += Bandeja_IniciarSolicitado;
+        ServicioAccionesBandeja.DetenerSincronizacionSolicitado += Bandeja_DetenerSolicitado;
+        ServicioAccionesBandeja.VerMonitorSolicitado += Bandeja_VerMonitorSolicitado;
+        ServicioAccionesBandeja.SalirAplicacionSolicitado += Bandeja_SalirSolicitado;
+        _bandejaSuscrita = true;
+    }
+
+    private void DesuscribirAccionesBandeja()
+    {
+        if (!_bandejaSuscrita)
+        {
+            return;
+        }
+
+        ServicioAccionesBandeja.AbrirVentanaSolicitado -= Bandeja_AbrirVentanaSolicitada;
+        ServicioAccionesBandeja.IniciarSincronizacionSolicitado -= Bandeja_IniciarSolicitado;
+        ServicioAccionesBandeja.DetenerSincronizacionSolicitado -= Bandeja_DetenerSolicitado;
+        ServicioAccionesBandeja.VerMonitorSolicitado -= Bandeja_VerMonitorSolicitado;
+        ServicioAccionesBandeja.SalirAplicacionSolicitado -= Bandeja_SalirSolicitado;
+        _bandejaSuscrita = false;
+    }
+
+    private void EjecutarEnHiloUi(Action accion) =>
+        DispatcherQueue.TryEnqueue(() => accion());
+
+    private void Bandeja_AbrirVentanaSolicitada() =>
+        EjecutarEnHiloUi(RestaurarVentanaDesdeBandeja);
+
+    private void Bandeja_IniciarSolicitado() =>
+        EjecutarEnHiloUi(async () =>
+        {
+            if (ViewModel.PuedeIniciar)
+            {
+                await ViewModel.IniciarCommand.ExecuteAsync(null);
+            }
+        });
+
+    private void Bandeja_DetenerSolicitado() =>
+        EjecutarEnHiloUi(async () =>
+        {
+            if (ViewModel.PuedeDetener)
+            {
+                await ViewModel.DetenerCommand.ExecuteAsync(null);
+            }
+        });
+
+    private void Bandeja_VerMonitorSolicitado() =>
+        EjecutarEnHiloUi(() =>
+        {
+            RestaurarVentanaDesdeBandeja();
+            SeleccionarSeccionPorTag("monitor");
+        });
+
+    private void Bandeja_SalirSolicitado() =>
+        EjecutarEnHiloUi(async () => await CerrarAplicacionDesdeBandejaAsync());
+
+    private void RestaurarVentanaDesdeBandeja()
+    {
+        if (App.Window is MainWindow ventana)
+        {
+            ventana.RestaurarDesdeBandeja();
+        }
+    }
+
+    private async Task CerrarAplicacionDesdeBandejaAsync()
+    {
+        ViewModel.SolicitarSalirAplicacion();
+
+        if (!_cierreVentanaAutorizado && ViewModel.HayCambiosSinGuardar)
+        {
+            RestaurarVentanaDesdeBandeja();
+            var decision = await ViewModel.PreguntarCambiosSinGuardarAsync("cerrar la aplicación");
+            if (decision == DecisionCambiosPendientes.Cancelar)
+            {
+                return;
+            }
+
+            if (decision == DecisionCambiosPendientes.GuardarYContinuar
+                && ViewModel.GuardarCommand.CanExecute(null))
+            {
+                await ViewModel.GuardarCommand.ExecuteAsync(null);
+            }
+            else if (decision == DecisionCambiosPendientes.ContinuarSinGuardar)
+            {
+                ViewModel.DescartarCambiosPendientes();
+            }
+        }
+
+        _cierreVentanaAutorizado = true;
+        App.Window.AppWindow.Closing -= AppWindow_Closing;
+        DesuscribirAccionesBandeja();
+        ViewModel.Dispose();
+        App.Window.Close();
     }
 
     /// <summary>Enlaza los separadores horizontales del monitor (sin dependencias externas).</summary>
@@ -82,7 +191,20 @@ public sealed partial class MainPage : Page
 
     private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
     {
-        if (_cierreVentanaAutorizado || !ViewModel.HayCambiosSinGuardar)
+        if (_cierreVentanaAutorizado)
+        {
+            return;
+        }
+
+        if (ViewModel.DebeOcultarEnBandejaAlCerrar())
+        {
+            args.Cancel = true;
+            App.Window.AppWindow.Hide();
+            ViewModel.NotificarOcultadoEnBandeja();
+            return;
+        }
+
+        if (!ViewModel.HayCambiosSinGuardar)
         {
             return;
         }
@@ -107,7 +229,24 @@ public sealed partial class MainPage : Page
 
         _cierreVentanaAutorizado = true;
         App.Window.AppWindow.Closing -= AppWindow_Closing;
+        DesuscribirAccionesBandeja();
+        ViewModel.Dispose();
         App.Window.Close();
+    }
+
+    private void ViewModel_ModoInterfazCambiado(object? sender, EventArgs e)
+    {
+        if (ViewModel.ModoInterfazAvanzado)
+        {
+            return;
+        }
+
+        if (PanelMonitor.Visibility == Visibility.Visible
+            || PanelRegistro.Visibility == Visibility.Visible
+            || PanelEstadisticas.Visibility == Visibility.Visible)
+        {
+            SeleccionarSeccionPorTag("inicio");
+        }
     }
 
     private void NavPrincipal_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
@@ -178,6 +317,12 @@ public sealed partial class MainPage : Page
         });
     }
 
+    private void ConsejoIniciar_Cerrado(TeachingTip sender, object args) =>
+        ViewModel.MarcarConsejoIniciarCerrado();
+
+    private void ConsejoAnalizar_Cerrado(TeachingTip sender, object args) =>
+        ViewModel.MarcarConsejoAnalizarCerrado();
+
     private void IrASincronizacion_Click(object sender, RoutedEventArgs e) =>
         SeleccionarSeccionPorTag("pares");
 
@@ -186,6 +331,18 @@ public sealed partial class MainPage : Page
 
     private void IrAGuia_Click(object sender, RoutedEventArgs e) =>
         SeleccionarSeccionPorTag("guia");
+
+    private void IrAInicioAsistente_Click(object sender, RoutedEventArgs e)
+    {
+        SeleccionarSeccionPorTag("inicio");
+        ViewModel.AbrirAsistenteOnboardingCommand.Execute(null);
+    }
+
+    private void RestablecerConsejos_Click(object sender, RoutedEventArgs e)
+    {
+        ServicioOnboarding.RestablecerConsejos();
+        ViewModel.IntentarMostrarConsejosIniciales();
+    }
 
     private void SeleccionarSeccionPorTag(string tag)
     {
@@ -286,6 +443,36 @@ public sealed partial class MainPage : Page
         if (ViewModel.PuedeDetener)
         {
             await ViewModel.RecargarCommand.ExecuteAsync(null);
+            args.Handled = true;
+        }
+    }
+
+    /// <summary>Atajo Ctrl+Shift+A: analizar cambios sin copiar.</summary>
+    private async void AtajoAnalizar_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (ViewModel.AnalizarCambiosCommand.CanExecute(null))
+        {
+            await ViewModel.AnalizarCambiosCommand.ExecuteAsync(null);
+            args.Handled = true;
+        }
+    }
+
+    /// <summary>Atajo Ctrl+I: inicia el demonio si está detenido.</summary>
+    private async void AtajoIniciar_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (ViewModel.PuedeIniciar)
+        {
+            await ViewModel.IniciarCommand.ExecuteAsync(null);
+            args.Handled = true;
+        }
+    }
+
+    /// <summary>Atajo Ctrl+Shift+S: detiene el demonio si está activo.</summary>
+    private async void AtajoDetener_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (ViewModel.PuedeDetener)
+        {
+            await ViewModel.DetenerCommand.ExecuteAsync(null);
             args.Handled = true;
         }
     }

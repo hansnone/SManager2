@@ -4,12 +4,15 @@ using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using SManager.Core.Modelos;
 using SManager.Gui.Shared;
 using SManager.Gui.WinUI.Models;
+using SManager.Gui.Shared.Modelos;
+using SManager.Gui.Shared.Servicios;
 using SManager.Gui.WinUI.Servicios;
 using SManager.Ipc;
 using SManager.Ipc.Modelos;
@@ -98,6 +101,54 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
     private string _textoPolling = string.Empty;
 
     [ObservableProperty]
+    private string _textoDashboardPerfil = string.Empty;
+
+    [ObservableProperty]
+    private string _textoDashboardOrigenDestino = string.Empty;
+
+    [ObservableProperty]
+    private string _textoDashboardProgreso = "—";
+
+    [ObservableProperty]
+    private string _textoArchivoActual = "—";
+
+    [ObservableProperty]
+    private string _textoUltimaSyncCorrecta = "—";
+
+    [ObservableProperty]
+    private string _textoErroresResumen = "—";
+
+    [ObservableProperty]
+    private string _textoArchivosCopiadosSesion = "—";
+
+    [ObservableProperty]
+    private string _textoColaHumana = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PuedeAnalizarCambios))]
+    private bool _analizandoCambios;
+
+    /// <summary>Habilita el botón Analizar cambios mientras no hay análisis en curso.</summary>
+    public bool PuedeAnalizarCambios => !AnalizandoCambios;
+
+    [ObservableProperty]
+    private bool _mostrarEstadoVacioRegistro = true;
+
+    [ObservableProperty]
+    private bool _mostrarAsistenteOnboarding;
+
+    [ObservableProperty]
+    private bool _mostrarConsejosContextuales = true;
+
+    [ObservableProperty]
+    private bool _consejoIniciarAbierto;
+
+    [ObservableProperty]
+    private bool _consejoAnalizarAbierto;
+
+    public AsistenteOnboardingViewModel Asistente { get; } = new();
+
+    [ObservableProperty]
     private string _parFiltroRegistroSeleccionado = ServicioFiltradoRegistro.EtiquetaTodosLosPares;
 
     [ObservableProperty]
@@ -105,6 +156,43 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private string _textoBusquedaRegistro = string.Empty;
+
+    [ObservableProperty]
+    private string _textoResumenRegistroFiltrado = string.Empty;
+
+    [ObservableProperty]
+    private bool _minimizarABandejaAlCerrar = true;
+
+    [ObservableProperty]
+    private bool _notificacionesHabilitadas = true;
+
+    [ObservableProperty]
+    private bool _bandejaHabilitada = true;
+
+    [ObservableProperty]
+    private bool _modoInterfazAvanzado;
+
+    [ObservableProperty]
+    private string _temaAplicacion = ServicioTemaAplicacion.TemaSistema;
+
+    [ObservableProperty]
+    private string _idiomaUiEtiqueta = ServicioTextosUi.EtiquetaIdiomaEspanol;
+
+    /// <summary>Texto completo del estado para lectores de pantalla (no depende solo del color).</summary>
+    [ObservableProperty]
+    private string _textoEstadoAccesible = "Estado: Detenido";
+
+    [ObservableProperty]
+    private bool _mostrarHistorialSesionesVacio = true;
+
+    public ObservableCollection<HistorialSesionViewModel> HistorialSesiones { get; } = [];
+
+    public IReadOnlyList<string> OpcionesTema => ServicioTemaAplicacion.Opciones;
+
+    public IReadOnlyList<string> OpcionesIdioma => ServicioTextosUi.OpcionesIdiomaEtiqueta;
+
+    /// <summary>La vista principal reacciona al cambiar modo básico/avanzado.</summary>
+    public event EventHandler? ModoInterfazCambiado;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
@@ -159,9 +247,35 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
 
     private bool _cargandoPreferenciasAutoInicio;
 
+    private ServicioBandejaSistema? _bandeja;
+
+    private readonly ServicioMonitorNotificaciones _monitorNotificaciones = new();
+
+    private bool _cargandoPreferenciasGui;
+
+    private bool _salirExplicitoSolicitado;
+
+    private bool _demonioEstabaEnEjecucion;
+
+    private DatosSesionEnCurso? _datosSesionActual;
+
+    /// <summary>Contadores de la sesión en curso mientras el demonio está activo.</summary>
+    private sealed class DatosSesionEnCurso
+    {
+        public DateTimeOffset InicioUtc { get; init; }
+
+        public int Copiados { get; set; }
+
+        public int Errores { get; set; }
+
+        public long BytesEscritos { get; set; }
+    }
+
     public MainPageViewModel()
     {
         Pares.CollectionChanged += Pares_CollectionChanged;
+        Asistente.FinalizadoSolicitado += ProcesarAsistenteFinalizadoAsync;
+        Asistente.CerrarSolicitado += (_, _) => CerrarAsistenteOnboarding();
     }
 
     private void Pares_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -173,6 +287,7 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
             foreach (ParFilaViewModel par in e.NewItems)
             {
                 SuscribirCambiosPar(par);
+                par.ActualizarAvisosRiesgo();
             }
         }
 
@@ -209,10 +324,285 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         CargarListaPerfiles();
         CargarConfiguracionPerfilActual();
         CargarPreferenciasAutoInicio();
+        CargarPreferenciasGui();
+        InicializarBandejaYNotificaciones();
+        CargarHistorialSesiones(PerfilActual());
+        ServicioTemaAplicacion.Aplicar(TemaAplicacion);
         ActualizarEstadoBotones();
         ReiniciarRegistroPerfil();
         _temporizador.Start();
         _omitirProximoCambioPerfil = true;
+
+        if (ServicioOnboarding.DebeMostrarAsistenteAutomatico(Pares.Count > 0))
+        {
+            MostrarAsistenteOnboarding = true;
+        }
+        else
+        {
+            IntentarMostrarConsejosIniciales();
+        }
+    }
+
+    private void CargarPreferenciasGui()
+    {
+        _cargandoPreferenciasGui = true;
+        try
+        {
+            var preferencias = ServicioPreferenciasGui.Cargar();
+            MostrarConsejosContextuales = preferencias.MostrarConsejosContextuales;
+            MinimizarABandejaAlCerrar = preferencias.MinimizarABandejaAlCerrar;
+            NotificacionesHabilitadas = preferencias.NotificacionesHabilitadas;
+            BandejaHabilitada = preferencias.BandejaHabilitada;
+            ModoInterfazAvanzado = preferencias.ModoInterfazAvanzado;
+            TemaAplicacion = ServicioTemaAplicacion.Normalizar(preferencias.TemaAplicacion);
+            IdiomaUiEtiqueta = ServicioTextosUi.EtiquetaDesdeCodigo(preferencias.IdiomaUi);
+        }
+        finally
+        {
+            _cargandoPreferenciasGui = false;
+        }
+    }
+
+    private void InicializarBandejaYNotificaciones()
+    {
+        ServicioNotificacionesWindows.Inicializar();
+
+        if (!BandejaHabilitada)
+        {
+            return;
+        }
+
+        try
+        {
+            var rutaIcono = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
+            _bandeja = new ServicioBandejaSistema();
+            _bandeja.Inicializar(rutaIcono);
+            ActualizarBandejaSistema();
+        }
+        catch
+        {
+            _bandeja?.Dispose();
+            _bandeja = null;
+        }
+    }
+
+    private void ActualizarBandejaSistema()
+    {
+        if (_bandeja is null || !BandejaHabilitada)
+        {
+            return;
+        }
+
+        var tooltip = DemonioEnEjecucion
+            ? $"SManager — Sincronizando ({PerfilActual()})"
+            : $"SManager — Detenido ({PerfilActual()})";
+
+        _bandeja.ActualizarEstado(tooltip, PuedeIniciar, PuedeDetener);
+    }
+
+    /// <summary>True si el cierre debe convertirse en ocultar a la bandeja.</summary>
+    public bool DebeOcultarEnBandejaAlCerrar() =>
+        BandejaHabilitada && MinimizarABandejaAlCerrar && !_salirExplicitoSolicitado;
+
+    public void NotificarOcultadoEnBandeja()
+    {
+        if (NotificacionesHabilitadas)
+        {
+            ServicioNotificacionesWindows.Mostrar(
+                "SManager sigue activo",
+                "La aplicación continúa en la bandeja del sistema. Doble clic en el icono para abrirla.");
+        }
+    }
+
+    public void SolicitarSalirAplicacion() => _salirExplicitoSolicitado = true;
+
+    partial void OnMinimizarABandejaAlCerrarChanged(bool value) => PersistirPreferenciasGui();
+
+    partial void OnNotificacionesHabilitadasChanged(bool value) => PersistirPreferenciasGui();
+
+    partial void OnModoInterfazAvanzadoChanged(bool value)
+    {
+        PersistirPreferenciasGui();
+        if (!_cargandoPreferenciasGui)
+        {
+            ModoInterfazCambiado?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    partial void OnTemaAplicacionChanged(string value)
+    {
+        PersistirPreferenciasGui();
+        if (!_cargandoPreferenciasGui)
+        {
+            ServicioTemaAplicacion.Aplicar(value);
+        }
+    }
+
+    partial void OnIdiomaUiEtiquetaChanged(string value) => PersistirPreferenciasGui();
+
+    partial void OnBandejaHabilitadaChanged(bool value)
+    {
+        PersistirPreferenciasGui();
+        if (_cargandoPreferenciasGui)
+        {
+            return;
+        }
+
+        if (value && _bandeja is null)
+        {
+            InicializarBandejaYNotificaciones();
+        }
+        else if (!value)
+        {
+            _bandeja?.Dispose();
+            _bandeja = null;
+        }
+    }
+
+    private void PersistirPreferenciasGui()
+    {
+        if (_cargandoPreferenciasGui)
+        {
+            return;
+        }
+
+        var preferencias = ServicioPreferenciasGui.Cargar();
+        preferencias.MinimizarABandejaAlCerrar = MinimizarABandejaAlCerrar;
+        preferencias.NotificacionesHabilitadas = NotificacionesHabilitadas;
+        preferencias.BandejaHabilitada = BandejaHabilitada;
+        preferencias.ModoInterfazAvanzado = ModoInterfazAvanzado;
+        preferencias.TemaAplicacion = ServicioTemaAplicacion.Normalizar(TemaAplicacion);
+        preferencias.IdiomaUi = ServicioTextosUi.CodigoDesdeEtiqueta(IdiomaUiEtiqueta);
+        ServicioPreferenciasGui.Guardar(preferencias);
+    }
+
+    [RelayCommand]
+    private void AplicarFiltroRegistroRapido(string? nivel)
+    {
+        NivelFiltroRegistroSeleccionado = string.IsNullOrWhiteSpace(nivel)
+            ? MapeadorNivelRegistro.EtiquetaTodosLosNiveles
+            : nivel;
+    }
+
+    [RelayCommand]
+    private async Task ExportarRegistroAsync()
+    {
+        if (LineasRegistro.Count == 0)
+        {
+            await MostrarAvisoAsync("No hay líneas visibles para exportar.", "Registro vacío");
+            return;
+        }
+
+        var lineas = LineasRegistro.Select(l => l.TextoCompleto).ToList();
+        var ruta = await ServicioExportarDiagnostico.ExportarRegistroAsync(lineas, PerfilActual())
+            .ConfigureAwait(true);
+        await MostrarAvisoAsync($"Registro exportado a:\n{ruta}", "Exportación completada");
+    }
+
+    [RelayCommand]
+    private async Task ExportarDiagnosticoAsync()
+    {
+        var perfil = PerfilActual();
+        var estado = await _ipc.LeerEstadoAsync(perfil).ConfigureAwait(true);
+        var ruta = await ServicioExportarDiagnostico.ExportarPaqueteDiagnosticoAsync(
+                perfil,
+                RutaConfiguracion,
+                estado,
+                _textoRegistroCrudo,
+                LineasRegistro.Count)
+            .ConfigureAwait(true);
+
+        await MostrarAvisoAsync($"Diagnóstico exportado a:\n{ruta}", "Exportación completada");
+    }
+
+    private void ActualizarResumenRegistroFiltrado()
+    {
+        if (LineasRegistro.Count == 0)
+        {
+            TextoResumenRegistroFiltrado = string.Empty;
+            return;
+        }
+
+        var errores = LineasRegistro.Count(l => l.Nivel.Equals("ERROR", StringComparison.OrdinalIgnoreCase));
+        var advertencias = LineasRegistro.Count(l => l.Nivel.Equals("WARN", StringComparison.OrdinalIgnoreCase));
+        TextoResumenRegistroFiltrado =
+            $"{LineasRegistro.Count:N0} líneas visibles — {errores:N0} errores — {advertencias:N0} advertencias";
+    }
+
+    /// <summary>Muestra consejos contextuales la primera vez que el usuario usa la app.</summary>
+    public void IntentarMostrarConsejosIniciales()
+    {
+        if (!MostrarConsejosContextuales)
+        {
+            return;
+        }
+
+        if (ServicioOnboarding.DebeMostrarConsejo(ServicioOnboarding.ConsejoIniciar))
+        {
+            ConsejoIniciarAbierto = true;
+        }
+    }
+
+    public void MarcarConsejoIniciarCerrado()
+    {
+        ConsejoIniciarAbierto = false;
+        ServicioOnboarding.MarcarConsejoVisto(ServicioOnboarding.ConsejoIniciar);
+    }
+
+    public void MarcarConsejoAnalizarCerrado()
+    {
+        ConsejoAnalizarAbierto = false;
+        ServicioOnboarding.MarcarConsejoVisto(ServicioOnboarding.ConsejoAnalizar);
+    }
+
+    partial void OnMostrarConsejosContextualesChanged(bool value)
+    {
+        var preferencias = ServicioPreferenciasGui.Cargar();
+        preferencias.MostrarConsejosContextuales = value;
+        ServicioPreferenciasGui.Guardar(preferencias);
+
+        if (!value)
+        {
+            ConsejoIniciarAbierto = false;
+            ConsejoAnalizarAbierto = false;
+        }
+    }
+
+    [RelayCommand]
+    private void AbrirAsistenteOnboarding()
+    {
+        Asistente.PasoActual = PasoAsistenteOnboarding.Bienvenida;
+        MostrarAsistenteOnboarding = true;
+    }
+
+    private void CerrarAsistenteOnboarding() => MostrarAsistenteOnboarding = false;
+
+    private async Task ProcesarAsistenteFinalizadoAsync(ResultadoAsistenteOnboarding resultado)
+    {
+        Pares.Add(resultado.Par);
+        ParSeleccionado = resultado.Par;
+        ActualizarFiltrosParRegistro();
+
+        if (resultado.GuardarConfiguracion && PuedeEditarConfig)
+        {
+            GuardarSilencioso();
+        }
+
+        if (resultado.MarcarAsistenteCompletado)
+        {
+            ServicioOnboarding.MarcarAsistenteCompletado();
+        }
+
+        CerrarAsistenteOnboarding();
+
+        if (resultado.IniciarSincronizacion && PuedeIniciar)
+        {
+            await IniciarAsync();
+        }
+        else
+        {
+            IntentarMostrarConsejosIniciales();
+        }
     }
 
     /// <summary>Evita recargar el perfil dos veces cuando el ComboBox dispara SelectionChanged al arrancar.</summary>
@@ -333,9 +723,13 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
     {
         CargarConfiguracionPerfilActual();
         ActualizarEstadoBotones();
+        _monitorNotificaciones.Reiniciar();
+        _demonioEstabaEnEjecucion = DemonioEnEjecucion;
+        _datosSesionActual = null;
         ReiniciarRegistroPerfil();
         Estadisticas.ReiniciarMuestreo();
         LimpiarVistaTelemetria();
+        CargarHistorialSesiones(PerfilActual());
     }
 
     /// <summary>
@@ -570,10 +964,16 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
     [RelayCommand(CanExecute = nameof(PuedeEditarConfig))]
     private async Task GuardarAsync()
     {
+        GuardarSilencioso();
+        await MostrarAvisoAsync($"Configuración guardada en:\n{_rutaConfig}", "SManager 2.0");
+    }
+
+    /// <summary>Guarda sin diálogo de confirmación (asistente, flujos automáticos).</summary>
+    private void GuardarSilencioso()
+    {
         LeerConfiguracionDesdeUi();
         _servicioConfig.Guardar(_rutaConfig, _configuracion);
         MarcarComoGuardado();
-        await MostrarAvisoAsync($"Configuración guardada en:\n{_rutaConfig}", "SManager 2.0");
     }
 
     [RelayCommand(AllowConcurrentExecutions = true)]
@@ -776,6 +1176,160 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         await MostrarAvisoAsync(
             ok ? "Todas las rutas existen." : string.Join('\n', errores),
             "Validación");
+    }
+
+    /// <summary>Simula la sincronización: cuenta archivos nuevos/modificados sin copiar nada.</summary>
+    [RelayCommand(AllowConcurrentExecutions = false)]
+    private async Task AnalizarCambiosAsync()
+    {
+        if (AnalizandoCambios)
+        {
+            return;
+        }
+
+        LeerConfiguracionDesdeUi();
+        var paresActivos = _configuracion.Pares
+            .Where(p => p.Habilitado && !p.Pausado)
+            .ToList();
+
+        if (paresActivos.Count == 0)
+        {
+            await MostrarAvisoAsync(
+                "Añade al menos un par activo (habilitado y no pausado) para analizar cambios.",
+                "Sin pares activos");
+            return;
+        }
+
+        AnalizandoCambios = true;
+        try
+        {
+            var resultado = await Task.Run(() =>
+                ServicioAnalisisCambios.AnalizarPares(paresActivos, CancellationToken.None))
+                .ConfigureAwait(true);
+
+            await MostrarDialogoAnalisisAsync(resultado).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            await MostrarAvisoAsync(ex.Message, "No se pudo analizar").ConfigureAwait(true);
+        }
+        finally
+        {
+            AnalizandoCambios = false;
+        }
+    }
+
+    private async Task MostrarDialogoAnalisisAsync(ResultadoAnalisisGlobal resultado)
+    {
+        var contenido = new StackPanel { Spacing = 12, MaxWidth = 520 };
+
+        contenido.Children.Add(new TextBlock
+        {
+            Text = "Vista previa — no se ha copiado ningún archivo.",
+            TextWrapping = TextWrapping.WrapWholeWords
+        });
+
+        var tabla = new Grid { ColumnSpacing = 12, RowSpacing = 6 };
+        tabla.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
+        tabla.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        tabla.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        AgregarFilaAnalisis(tabla, 0, "Acción", "Cantidad", "Tamaño", negrita: true);
+        AgregarFilaAnalisis(
+            tabla,
+            1,
+            "Archivos nuevos",
+            resultado.TotalNuevos.ToString("N0"),
+            ServicioFormateoEstadisticas.FormatearBytes(resultado.TotalBytesNuevos));
+        AgregarFilaAnalisis(
+            tabla,
+            2,
+            "Archivos modificados",
+            resultado.TotalModificados.ToString("N0"),
+            ServicioFormateoEstadisticas.FormatearBytes(resultado.TotalBytesModificados));
+        AgregarFilaAnalisis(
+            tabla,
+            3,
+            "Omitidos por filtro",
+            resultado.TotalOmitidos.ToString("N0"),
+            ServicioFormateoEstadisticas.FormatearBytes(resultado.PorPar.Sum(p => p.BytesOmitidosFiltro)));
+        AgregarFilaAnalisis(
+            tabla,
+            4,
+            "Errores de acceso",
+            resultado.TotalErrores.ToString("N0"),
+            "—");
+        AgregarFilaAnalisis(
+            tabla,
+            5,
+            "Total pendiente (estimado)",
+            (resultado.TotalNuevos + resultado.TotalModificados).ToString("N0"),
+            ServicioFormateoEstadisticas.FormatearBytes(resultado.TotalBytesPendientes));
+
+        contenido.Children.Add(tabla);
+
+        foreach (var par in resultado.PorPar.Where(p => p.AvisosRiesgo.Count > 0))
+        {
+            foreach (var aviso in par.AvisosRiesgo)
+            {
+                contenido.Children.Add(new InfoBar
+                {
+                    Title = par.NombrePar,
+                    Message = aviso,
+                    Severity = InfoBarSeverity.Warning,
+                    IsOpen = true,
+                    IsClosable = false
+                });
+            }
+        }
+
+        var cuadro = new ContentDialog
+        {
+            Title = "Análisis de cambios",
+            Content = contenido,
+            CloseButtonText = "Cerrar",
+            PrimaryButtonText = "Ir a sincronización",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = App.Window.Content.XamlRoot
+        };
+
+        if (await cuadro.ShowAsync() == ContentDialogResult.Primary)
+        {
+            // La vista cambia de sección desde code-behind si hace falta; aquí solo avisamos.
+            await MostrarAvisoAsync("Usa el menú lateral «Sincronización» para revisar los pares.", "Sincronización");
+        }
+    }
+
+    private static void AgregarFilaAnalisis(
+        Grid tabla,
+        int fila,
+        string accion,
+        string cantidad,
+        string tamano,
+        bool negrita = false)
+    {
+        while (tabla.RowDefinitions.Count <= fila)
+        {
+            tabla.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        }
+
+        var negritaFila = negrita;
+        tabla.Children.Add(CrearCeldaAnalisis(accion, fila, 0, negritaFila));
+        tabla.Children.Add(CrearCeldaAnalisis(cantidad, fila, 1, negritaFila));
+        tabla.Children.Add(CrearCeldaAnalisis(tamano, fila, 2, negritaFila));
+    }
+
+    private static TextBlock CrearCeldaAnalisis(string texto, int fila, int columna, bool negrita)
+    {
+        var bloque = new TextBlock
+        {
+            Text = texto,
+            FontWeight = negrita ? FontWeights.SemiBold : FontWeights.Normal,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetRow(bloque, fila);
+        Grid.SetColumn(bloque, columna);
+        return bloque;
     }
 
     /// <summary>
@@ -1034,6 +1588,7 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         IntervaloPublicacionEstadoMs = _configuracion.IntervaloPublicacionEstadoMs;
         ActualizarFiltrosParRegistro();
         ActualizarEstadoVacioPares();
+        ActualizarPanelInicio(null);
     }
 
     /// <summary>Vacía paneles que dependen de telemetría IPC en vivo.</summary>
@@ -1044,7 +1599,93 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         MonitorPares.Clear();
         CopiasEnCurso.Clear();
         ActividadReciente.Clear();
+        ActualizarPanelInicio(null);
     }
+
+    /// <summary>Actualiza el dashboard de Inicio con datos legibles para el usuario.</summary>
+    private void ActualizarPanelInicio(EstadoPerfil? estado)
+    {
+        TextoDashboardPerfil = $"Perfil activo: {PerfilActual()}";
+
+        var paresActivos = Pares.Where(p => p.Habilitado && !p.Pausado).ToList();
+        if (paresActivos.Count == 0)
+        {
+            TextoDashboardOrigenDestino =
+                "Todavía no hay pares activos. Crea uno en Sincronización para definir origen y destino.";
+        }
+        else if (paresActivos.Count == 1)
+        {
+            var unico = paresActivos[0];
+            TextoDashboardOrigenDestino =
+                $"Origen:\n{unico.RutaOrigen}\n\nDestino:\n{unico.RutaDestino}";
+        }
+        else
+        {
+            TextoDashboardOrigenDestino =
+                $"{paresActivos.Count} pares activos. Abre Sincronización para ver cada origen → destino.";
+        }
+
+        if (estado is null || !DemonioEnEjecucion)
+        {
+            TextoDashboardProgreso = "—";
+            TextoArchivoActual = "—";
+            TextoErroresResumen = "—";
+            TextoArchivosCopiadosSesion = "—";
+            TextoColaHumana = "Pulsa Iniciar para comenzar la sincronización unidireccional.";
+            TextoUltimaSyncCorrecta = ResolverTextoUltimaSyncCorrecta();
+            return;
+        }
+
+        TextoErroresResumen = estado.Totales.Errores == 0
+            ? "0 errores en esta sesión"
+            : $"{estado.Totales.Errores:N0} error(es) en esta sesión";
+
+        TextoArchivosCopiadosSesion =
+            $"{estado.Totales.Copiados:N0} archivos copiados ({ServicioFormateoEstadisticas.FormatearBytes(estado.Totales.BytesEscritos)})";
+
+        TextoColaHumana = estado.ColaCopiaPendiente == 0
+            ? "Cola vacía — no hay archivos pendientes"
+            : $"{estado.ColaCopiaPendiente:N0} archivos pendientes en cola";
+
+        var ultimaActividad = estado.Pares
+            .Select(p => p.UltimaSincronizacion)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => DateTimeOffset.TryParse(s, out var instante) ? instante : (DateTimeOffset?)null)
+            .Where(i => i.HasValue)
+            .Select(i => i!.Value)
+            .DefaultIfEmpty()
+            .Max();
+
+        TextoUltimaSyncCorrecta = ultimaActividad == default
+            ? "Aún no hay sincronizaciones registradas en esta sesión"
+            : $"Última actividad: {ServicioFormateoEstadisticas.FormatearInstanteUtc(ultimaActividad.ToString("o"))}";
+
+        var copia = estado.CopiasEnCurso.FirstOrDefault();
+        if (copia is not null)
+        {
+            TextoArchivoActual = copia.Archivo;
+            var eta = copia.EtaSegundos is > 0
+                ? $", restante ~{ServicioFormateoEstadisticas.FormatearDuracion(TimeSpan.FromSeconds(copia.EtaSegundos.Value))}"
+                : string.Empty;
+            TextoDashboardProgreso =
+                $"{copia.Porcentaje}% ({ServicioFormateoEstadisticas.FormatearBytes(copia.BytesCopiados)} / {ServicioFormateoEstadisticas.FormatearBytes(copia.BytesTotales)}){eta}";
+        }
+        else if (estado.ColaCopiaPendiente > 0)
+        {
+            TextoArchivoActual = "Preparando siguiente archivo…";
+            TextoDashboardProgreso = $"{estado.ColaCopiaPendiente:N0} en cola";
+        }
+        else
+        {
+            TextoArchivoActual = "En vigilancia — esperando cambios";
+            TextoDashboardProgreso = "Sin copias activas";
+        }
+
+        TextoResumen = $"{TextoColaHumana}. {TextoArchivosCopiadosSesion}. {TextoErroresResumen}.";
+    }
+
+    private void ActualizarEstadoVacioRegistro() =>
+        MostrarEstadoVacioRegistro = LineasRegistro.Count == 0;
 
     private void LeerConfiguracionDesdeUi()
     {
@@ -1089,6 +1730,60 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         return errores;
     }
 
+    private string ResolverTextoUltimaSyncCorrecta()
+    {
+        var ultima = ServicioHistorialSesiones.ObtenerUltimaSesionCorrecta(PerfilActual());
+        return ultima is null
+            ? "Aún no hay una sesión completada sin errores"
+            : $"Última sesión correcta: {ultima.TextoInicio} ({ultima.TextoResumen})";
+    }
+
+    private void CargarHistorialSesiones(string perfil)
+    {
+        HistorialSesiones.Clear();
+        foreach (var entrada in ServicioHistorialSesiones.CargarRecientes(perfil))
+        {
+            HistorialSesiones.Add(entrada);
+        }
+
+        MostrarHistorialSesionesVacio = HistorialSesiones.Count == 0;
+    }
+
+    /// <summary>Detecta inicio/fin de sesión del demonio para persistir historial.</summary>
+    private void EvaluarTransicionSesion(string perfil, EstadoPerfil? estado, bool enEjecucion)
+    {
+        if (enEjecucion && !_demonioEstabaEnEjecucion)
+        {
+            var inicio = DateTimeOffset.UtcNow;
+            if (estado is not null && DateTimeOffset.TryParse(estado.InicioSesionUtc, out var inicioIpc))
+            {
+                inicio = inicioIpc;
+            }
+
+            _datosSesionActual = new DatosSesionEnCurso { InicioUtc = inicio };
+        }
+        else if (enEjecucion && _datosSesionActual is not null && estado is not null)
+        {
+            _datosSesionActual.Copiados = estado.Totales.Copiados;
+            _datosSesionActual.Errores = estado.Totales.Errores;
+            _datosSesionActual.BytesEscritos = estado.Totales.BytesEscritos;
+        }
+        else if (!enEjecucion && _demonioEstabaEnEjecucion && _datosSesionActual is not null)
+        {
+            ServicioHistorialSesiones.RegistrarSesionFinalizada(
+                perfil,
+                _datosSesionActual.InicioUtc,
+                DateTimeOffset.UtcNow,
+                _datosSesionActual.Copiados,
+                _datosSesionActual.Errores,
+                _datosSesionActual.BytesEscritos);
+            _datosSesionActual = null;
+            CargarHistorialSesiones(perfil);
+        }
+
+        _demonioEstabaEnEjecucion = enEjecucion;
+    }
+
     private void ActualizarEstadoBotones()
     {
         var enEjecucion = _ipc.EstaDemonioEnEjecucion(PerfilActual());
@@ -1097,11 +1792,15 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         PuedeDetener = enEjecucion;
         PuedeEditarConfig = !enEjecucion;
         TextoEstado = enEjecucion ? "Sincronizando" : "Detenido";
+        TextoEstadoAccesible = enEjecucion
+            ? "Estado: Sincronizando — el demonio está copiando o vigilando archivos"
+            : "Estado: Detenido — pulsa Iniciar para comenzar";
         ColorEstado = new SolidColorBrush(
             enEjecucion
                 ? Microsoft.UI.Colors.MediumSeaGreen
                 : Microsoft.UI.Colors.IndianRed);
         OnPropertyChanged(nameof(ColorEstado));
+        ActualizarBandejaSistema();
     }
 
     /// <summary>
@@ -1135,14 +1834,13 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         App.DispatcherQueue.TryEnqueue(() =>
         {
             ActualizarEstadoBotones();
+            EvaluarTransicionSesion(perfil, estado, DemonioEnEjecucion);
 
             if (estado is not null)
             {
-                TextoResumen =
-                    $"Cola: {estado.ColaCopiaPendiente}  Únicos: {estado.ArchivosUnicosPendientes}  Dup.ev: {estado.DuplicadosEvitados}  Copiados: {estado.Totales.Copiados}  Errores: {estado.Totales.Errores}";
                 TextoPolling = estado.ProximoPollingEnSegundos.HasValue
-                    ? $"Próximo polling: en {estado.ProximoPollingEnSegundos}s"
-                    : "Próximo polling: —";
+                    ? $"Próximo barrido de seguridad: en {estado.ProximoPollingEnSegundos}s"
+                    : "Próximo barrido de seguridad: —";
 
                 ServicioSincronizacionLista.SincronizarInPlace(
                     MonitorPares,
@@ -1213,6 +1911,17 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
                 LimpiarVistaTelemetria();
             }
 
+            ActualizarPanelInicio(estado);
+
+            _monitorNotificaciones.Evaluar(
+                NotificacionesHabilitadas,
+                perfil,
+                DemonioEnEjecucion,
+                estado?.Totales.Copiados ?? 0,
+                estado?.Totales.Errores ?? 0);
+
+            ActualizarBandejaSistema();
+
             // El log se lee del disco aunque el demonio esté detenido.
             ActualizarRegistro(perfil);
             Estadisticas.ActualizarDesdeEstado(estado, ObtenerTamanoLogBytes(perfil), perfil);
@@ -1239,6 +1948,8 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         _indiceLineaCrudaProcesada = 0;
         LineasRegistro.Clear();
         ActualizarFiltrosParRegistro();
+        ActualizarEstadoVacioRegistro();
+        ActualizarResumenRegistroFiltrado();
         ActualizarRegistro(PerfilActual(), moverAlFinal: true);
     }
 
@@ -1270,6 +1981,8 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         LineasRegistro.Clear();
         _indiceLineaCrudaProcesada = 0;
         AnexarLineasRegistroVisibles(moverAlFinal);
+        ActualizarEstadoVacioRegistro();
+        ActualizarResumenRegistroFiltrado();
     }
 
     private void AnexarLineasRegistroVisibles(bool moverAlFinal)
@@ -1291,6 +2004,9 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
 
         _indiceLineaCrudaProcesada = lineasCrudas.Length;
 
+        ActualizarEstadoVacioRegistro();
+        ActualizarResumenRegistroFiltrado();
+
         if (moverAlFinal && anexadas > 0)
         {
             RegistroDesplazarAlFinalSolicitado?.Invoke(this, EventArgs.Empty);
@@ -1302,6 +2018,7 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         var rutaLog = RutasDatos.ResolverRutaLog(perfil);
         if (!File.Exists(rutaLog))
         {
+            ActualizarEstadoVacioRegistro();
             return;
         }
 
@@ -1364,5 +2081,7 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _temporizador?.Stop();
+        _bandeja?.Dispose();
+        _bandeja = null;
     }
 }
