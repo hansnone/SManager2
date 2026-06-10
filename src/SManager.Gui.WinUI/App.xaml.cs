@@ -11,6 +11,12 @@ public partial class App : Application
 
     public static Microsoft.UI.Dispatching.DispatcherQueue DispatcherQueue { get; private set; } = null!;
 
+    /// <summary>True si el registro Run lanzó la app con -minimized.</summary>
+    public static bool IniciarOcultoEnBandeja { get; private set; }
+
+    /// <summary>True si el registro Run lanzó la app con -autostart-daemon.</summary>
+    public static bool ArranqueConDemonio { get; private set; }
+
     public static nint WindowHandle =>
         WinRT.Interop.WindowNative.GetWindowHandle(Window);
 
@@ -66,13 +72,15 @@ public partial class App : Application
             ServicioTemaAplicacion.Aplicar(preferencias.TemaAplicacion, raiz);
         }
 
-        // Instalador o registro Run pueden pasar -minimized para abrir en la barra de tareas.
-        var iniciarMinimizado = Environment.GetCommandLineArgs()
-            .Any(argumento => string.Equals(argumento, "-minimized", StringComparison.OrdinalIgnoreCase));
+        // Arranque con Windows: flags leídos aquí; la bandeja y el demonio se aplican tras inicializar la GUI.
+        var argumentos = Environment.GetCommandLineArgs();
+        IniciarOcultoEnBandeja = argumentos.Any(a =>
+            string.Equals(a, "-minimized", StringComparison.OrdinalIgnoreCase));
+        ArranqueConDemonio = argumentos.Any(a =>
+            string.Equals(a, "-autostart-daemon", StringComparison.OrdinalIgnoreCase));
 
-        if (iniciarMinimizado && Window.AppWindow.Presenter is OverlappedPresenter presentador)
-        {
-            presentador.Minimize();
-        }
+        // Si el usuario pulsó un botón del toast con la app cerrada, abrir la sección correspondiente.
+        ServicioNotificacionesWindows.Inicializar();
+        ServicioNotificacionesWindows.ProcesarActivacionEnArranque();
     }
 }

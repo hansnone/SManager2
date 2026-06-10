@@ -1,7 +1,18 @@
+using Microsoft.Windows.AppLifecycle;
 using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
 
 namespace SManager.Gui.WinUI.Servicios;
+
+/// <summary>Opciones para toasts con botones de acción en la GUI.</summary>
+public sealed class OpcionesNotificacionToast
+{
+    /// <summary>Sección a abrir con «Ver detalles» (monitor, registro, pares, inicio…).</summary>
+    public string? SeccionDestino { get; init; }
+
+    /// <summary>Si false, solo muestra «Ver detalles» cuando hay sección.</summary>
+    public bool IncluirAbrirApp { get; init; } = true;
+}
 
 /// <summary>Notificaciones toast de Windows para eventos de sincronización.</summary>
 public static class ServicioNotificacionesWindows
@@ -9,6 +20,7 @@ public static class ServicioNotificacionesWindows
     private const string IdAplicacion = "SManager.Gui.WinUI";
 
     private static bool _registrado;
+    private static bool _handlerRegistrado;
 
     public static void Inicializar()
     {
@@ -25,6 +37,12 @@ public static class ServicioNotificacionesWindows
                 : new Uri("ms-appx:///Assets/AppIcon.ico");
             AppNotificationManager.Default.Register(IdAplicacion, uriIcono);
             _registrado = true;
+
+            if (!_handlerRegistrado)
+            {
+                AppNotificationManager.Default.NotificationInvoked += GestionarActivacionNotificacion;
+                _handlerRegistrado = true;
+            }
         }
         catch
         {
@@ -32,7 +50,8 @@ public static class ServicioNotificacionesWindows
         }
     }
 
-    public static void Mostrar(string titulo, string mensaje)
+    /// <summary>Procesa la activación cuando la app arranca desde un toast (app cerrada).</summary>
+    public static void ProcesarActivacionEnArranque()
     {
         if (!_registrado)
         {
@@ -41,89 +60,79 @@ public static class ServicioNotificacionesWindows
 
         try
         {
-            var notificacion = new AppNotificationBuilder()
-                .AddText(titulo)
-                .AddText(mensaje)
-                .BuildNotification();
+            var activacion = AppInstance.GetCurrent().GetActivatedEventArgs();
+            if (activacion?.Kind != ExtendedActivationKind.AppNotification)
+            {
+                return;
+            }
 
-            AppNotificationManager.Default.Show(notificacion);
+            if (activacion.Data is AppNotificationActivatedEventArgs argumentosNotificacion
+                && argumentosNotificacion.Arguments.Count > 0)
+            {
+                ServicioAccionesNotificacion.ProcesarActivacion(argumentosNotificacion.Arguments);
+            }
+        }
+        catch
+        {
+            // Sin activación por toast en este arranque.
+        }
+    }
+
+    public static void Mostrar(string titulo, string mensaje) =>
+        Mostrar(titulo, mensaje, opciones: null);
+
+    public static void Mostrar(string titulo, string mensaje, OpcionesNotificacionToast? opciones)
+    {
+        if (!_registrado)
+        {
+            return;
+        }
+
+        try
+        {
+            var constructor = new AppNotificationBuilder()
+                .AddText(titulo)
+                .AddText(mensaje);
+
+            if (opciones is not null)
+            {
+                AgregarAcciones(constructor, opciones);
+            }
+
+            AppNotificationManager.Default.Show(constructor.BuildNotification());
         }
         catch
         {
             // No interrumpir la GUI si el sistema rechaza la notificación.
         }
     }
-}
 
-/// <summary>Detecta transiciones de estado y emite notificaciones sin repetir spam.</summary>
-public sealed class ServicioMonitorNotificaciones
-{
-    private bool? _ultimoEnEjecucion;
-    private int _ultimosErrores;
-    private int _ultimosCopiados;
-
-    public void Reiniciar()
+    private static void AgregarAcciones(AppNotificationBuilder constructor, OpcionesNotificacionToast opciones)
     {
-        _ultimoEnEjecucion = null;
-        _ultimosErrores = 0;
-        _ultimosCopiados = 0;
+        if (!string.IsNullOrWhiteSpace(opciones.SeccionDestino))
+        {
+            constructor
+                .AddArgument("accion", "ver_detalles")
+                .AddArgument("seccion", opciones.SeccionDestino);
+
+            constructor.AddButton(
+                new AppNotificationButton("Ver detalles")
+                    .AddArgument("accion", "ver_detalles")
+                    .AddArgument("seccion", opciones.SeccionDestino));
+        }
+
+        if (opciones.IncluirAbrirApp)
+        {
+            constructor.AddButton(
+                new AppNotificationButton("Abrir SManager")
+                    .AddArgument("accion", "abrir"));
+        }
     }
 
-    /// <summary>Evalúa el estado IPC y muestra toasts cuando cambia la situación relevante.</summary>
-    public void Evaluar(
-        bool notificacionesHabilitadas,
-        string perfil,
-        bool enEjecucion,
-        int copiadosSesion,
-        int erroresSesion)
+    private static void GestionarActivacionNotificacion(
+        AppNotificationManager remitente,
+        AppNotificationActivatedEventArgs argumentos)
     {
-        if (!notificacionesHabilitadas)
-        {
-            _ultimoEnEjecucion = enEjecucion;
-            _ultimosCopiados = copiadosSesion;
-            _ultimosErrores = erroresSesion;
-            return;
-        }
-
-        if (_ultimoEnEjecucion is null)
-        {
-            _ultimoEnEjecucion = enEjecucion;
-            _ultimosCopiados = copiadosSesion;
-            _ultimosErrores = erroresSesion;
-            return;
-        }
-
-        if (enEjecucion && _ultimoEnEjecucion == false)
-        {
-            ServicioNotificacionesWindows.Mostrar(
-                "Sincronización iniciada",
-                $"Perfil «{perfil}»: el demonio está copiando archivos.");
-        }
-
-        if (!enEjecucion && _ultimoEnEjecucion == true)
-        {
-            if (erroresSesion > 0)
-            {
-                ServicioNotificacionesWindows.Mostrar(
-                    "Sincronización detenida con errores",
-                    $"Perfil «{perfil}»: {copiadosSesion:N0} copiados, {erroresSesion:N0} errores.");
-            }
-            else
-            {
-                ServicioNotificacionesWindows.Mostrar(
-                    "Sincronización detenida",
-                    $"Perfil «{perfil}»: {copiadosSesion:N0} archivos copiados en la sesión.");
-            }
-        }
-        else if (enEjecucion && erroresSesion > _ultimosErrores && erroresSesion - _ultimosErrores >= 5)
-        {
-            ServicioNotificacionesWindows.Mostrar(
-                "Errores durante la sincronización",
-                $"Perfil «{perfil}»: {erroresSesion:N0} errores acumulados. Revisa el Registro.");
-        }
-
-        _ultimoEnEjecucion = enEjecucion;
-        _ultimosCopiados = copiadosSesion;
-        _ultimosErrores = erroresSesion;
+        ServicioAccionesNotificacion.ProcesarActivacion(argumentos.Arguments);
     }
 }

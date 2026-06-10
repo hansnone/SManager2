@@ -245,6 +245,9 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _autoInicioMinimizado = true;
 
+    [ObservableProperty]
+    private bool _autoInicioIniciarDemonio = true;
+
     private bool _cargandoPreferenciasAutoInicio;
 
     private ServicioBandejaSistema? _bandeja;
@@ -333,13 +336,41 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         _temporizador.Start();
         _omitirProximoCambioPerfil = true;
 
-        if (ServicioOnboarding.DebeMostrarAsistenteAutomatico(Pares.Count > 0))
+        if (!App.IniciarOcultoEnBandeja
+            && ServicioOnboarding.DebeMostrarAsistenteAutomatico(Pares.Count > 0))
         {
             MostrarAsistenteOnboarding = true;
         }
-        else
+        else if (!App.IniciarOcultoEnBandeja)
         {
             IntentarMostrarConsejosIniciales();
+        }
+
+        _ = AplicarPreferenciasArranqueWindowsAsync();
+    }
+
+    /// <summary>Oculta en bandeja o inicia el demonio cuando Windows lanza la app al inicio de sesión.</summary>
+    private async Task AplicarPreferenciasArranqueWindowsAsync()
+    {
+        if (App.IniciarOcultoEnBandeja)
+        {
+            // Breve pausa para que NotifyIcon se registre antes de ocultar la ventana.
+            await Task.Delay(350);
+
+            if (BandejaHabilitada || _bandeja is not null)
+            {
+                App.Window.AppWindow.Hide();
+                NotificarOcultadoEnBandeja();
+            }
+            else if (App.Window.AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presentador)
+            {
+                presentador.Minimize();
+            }
+        }
+
+        if (App.ArranqueConDemonio && PuedeIniciar)
+        {
+            await IniciarAsync();
         }
     }
 
@@ -367,7 +398,9 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
     {
         ServicioNotificacionesWindows.Inicializar();
 
-        if (!BandejaHabilitada)
+        // Con -minimized la ventana se ocultará: hace falta icono de bandeja aunque el toggle esté apagado.
+        var necesitaBandeja = BandejaHabilitada || App.IniciarOcultoEnBandeja;
+        if (!necesitaBandeja)
         {
             return;
         }
@@ -378,6 +411,9 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
             _bandeja = new ServicioBandejaSistema();
             _bandeja.Inicializar(rutaIcono);
             ActualizarBandejaSistema();
+
+            ServicioSenalRestaurarVentana.IniciarEscucha(
+                ServicioAccionesBandeja.SolicitarAbrirVentana);
         }
         catch
         {
@@ -388,7 +424,7 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
 
     private void ActualizarBandejaSistema()
     {
-        if (_bandeja is null || !BandejaHabilitada)
+        if (_bandeja is null)
         {
             return;
         }
@@ -658,6 +694,22 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
             return;
         }
 
+        // Arranque oculto requiere bandeja para poder volver a abrir la app.
+        if (value && !BandejaHabilitada)
+        {
+            BandejaHabilitada = true;
+        }
+
+        PersistirPreferenciasAutoInicio();
+    }
+
+    partial void OnAutoInicioIniciarDemonioChanged(bool value)
+    {
+        if (_cargandoPreferenciasAutoInicio)
+        {
+            return;
+        }
+
         PersistirPreferenciasAutoInicio();
     }
 
@@ -676,21 +728,28 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
                 // Instalador marcó autostart: reflejar en la GUI sin fichero previo.
                 AutoInicioHabilitado = true;
                 AutoInicioMinimizado = registro.Minimizado;
+                AutoInicioIniciarDemonio = registro.IniciarDemonio;
                 ServicioPreferenciasGui.Guardar(new PreferenciasGuiDto
                 {
                     AutoInicioHabilitado = AutoInicioHabilitado,
-                    AutoInicioMinimizado = AutoInicioMinimizado
+                    AutoInicioMinimizado = AutoInicioMinimizado,
+                    AutoInicioIniciarDemonio = AutoInicioIniciarDemonio
                 });
                 return;
             }
 
             AutoInicioHabilitado = preferencias.AutoInicioHabilitado;
             AutoInicioMinimizado = preferencias.AutoInicioMinimizado;
+            AutoInicioIniciarDemonio = preferencias.AutoInicioIniciarDemonio;
 
             if (AutoInicioHabilitado != registro.Habilitado
-                || (AutoInicioHabilitado && AutoInicioMinimizado != registro.Minimizado))
+                || (AutoInicioHabilitado && AutoInicioMinimizado != registro.Minimizado)
+                || (AutoInicioHabilitado && AutoInicioIniciarDemonio != registro.IniciarDemonio))
             {
-                ServicioAutoInicioSistema.Aplicar(AutoInicioHabilitado, AutoInicioMinimizado);
+                ServicioAutoInicioSistema.Aplicar(
+                    AutoInicioHabilitado,
+                    AutoInicioMinimizado,
+                    AutoInicioIniciarDemonio);
             }
         }
         finally
@@ -701,15 +760,18 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
 
     private void PersistirPreferenciasAutoInicio()
     {
-        ServicioPreferenciasGui.Guardar(new PreferenciasGuiDto
-        {
-            AutoInicioHabilitado = AutoInicioHabilitado,
-            AutoInicioMinimizado = AutoInicioMinimizado
-        });
+        var preferencias = ServicioPreferenciasGui.Cargar();
+        preferencias.AutoInicioHabilitado = AutoInicioHabilitado;
+        preferencias.AutoInicioMinimizado = AutoInicioMinimizado;
+        preferencias.AutoInicioIniciarDemonio = AutoInicioIniciarDemonio;
+        ServicioPreferenciasGui.Guardar(preferencias);
 
         try
         {
-            ServicioAutoInicioSistema.Aplicar(AutoInicioHabilitado, AutoInicioMinimizado);
+            ServicioAutoInicioSistema.Aplicar(
+                AutoInicioHabilitado,
+                AutoInicioMinimizado,
+                AutoInicioIniciarDemonio);
         }
         catch (Exception ex)
         {
@@ -1035,6 +1097,7 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
 
         PuedeDetener = false;
         TextoEstado = "Deteniendo…";
+        _monitorNotificaciones.MarcarDetencionIntencional();
 
         try
         {
@@ -1913,12 +1976,24 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
 
             ActualizarPanelInicio(estado);
 
-            _monitorNotificaciones.Evaluar(
-                NotificacionesHabilitadas,
-                perfil,
-                DemonioEnEjecucion,
-                estado?.Totales.Copiados ?? 0,
-                estado?.Totales.Errores ?? 0);
+            _monitorNotificaciones.Evaluar(new ContextoEvaluacionNotificaciones
+            {
+                NotificacionesHabilitadas = NotificacionesHabilitadas,
+                Perfil = perfil,
+                EnEjecucion = DemonioEnEjecucion,
+                CopiadosSesion = estado?.Totales.Copiados ?? 0,
+                ErroresSesion = estado?.Totales.Errores ?? 0,
+                Pares = Pares
+                    .Select(p => new SnapshotParNotificacion(
+                        p.IdPar,
+                        p.Nombre,
+                        p.RutaOrigen,
+                        p.RutaDestino,
+                        p.Habilitado,
+                        p.Pausado))
+                    .ToList(),
+                LineasRegistro = LineasRegistro.ToList()
+            });
 
             ActualizarBandejaSistema();
 
@@ -2080,6 +2155,7 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        ServicioSenalRestaurarVentana.DetenerEscucha();
         _temporizador?.Stop();
         _bandeja?.Dispose();
         _bandeja = null;

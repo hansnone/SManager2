@@ -10,6 +10,9 @@ public sealed class PreferenciasGuiDto
 
     public bool AutoInicioMinimizado { get; set; } = true;
 
+    /// <summary>Al arrancar Windows, iniciar también el demonio de sincronización.</summary>
+    public bool AutoInicioIniciarDemonio { get; set; } = true;
+
     /// <summary>True tras completar u omitir el asistente de primer par.</summary>
     public bool AsistenteCompletado { get; set; }
 

@@ -92,7 +92,7 @@ public sealed partial class DialogoParControl : UserControl
 
     private async void BotonOrigen_Click(object sender, RoutedEventArgs e)
     {
-        var ruta = await ServicioSelectorCarpeta.ElegirCarpetaAsync(CajaOrigen.Text);
+        var ruta = await ServicioSelectorCarpeta.ElegirCarpetaAsync(CajaOrigen.Text, desdeDialogoModal: true);
         if (!string.IsNullOrEmpty(ruta))
         {
             CajaOrigen.Text = ruta;
@@ -101,7 +101,7 @@ public sealed partial class DialogoParControl : UserControl
 
     private async void BotonDestino_Click(object sender, RoutedEventArgs e)
     {
-        var ruta = await ServicioSelectorCarpeta.ElegirCarpetaAsync(CajaDestino.Text);
+        var ruta = await ServicioSelectorCarpeta.ElegirCarpetaAsync(CajaDestino.Text, desdeDialogoModal: true);
         if (!string.IsNullOrEmpty(ruta))
         {
             CajaDestino.Text = ruta;
@@ -124,7 +124,7 @@ public sealed partial class DialogoParControl : UserControl
     private async void BotonProbarFiltros_Click(object sender, RoutedEventArgs e)
     {
         var carpeta = string.IsNullOrWhiteSpace(CajaOrigen.Text)
-            ? await ServicioSelectorCarpeta.ElegirCarpetaAsync(null)
+            ? await ServicioSelectorCarpeta.ElegirCarpetaAsync(null, desdeDialogoModal: true)
             : CajaOrigen.Text.Trim();
 
         if (string.IsNullOrWhiteSpace(carpeta) || !Directory.Exists(carpeta))

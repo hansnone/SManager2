@@ -1471,9 +1471,13 @@
                                     Header="Iniciar SManager al encender Windows"
                                     IsOn="{x:Bind ViewModel.AutoInicioHabilitado, Mode=TwoWay}" />
                                 <ToggleSwitch
-                                    Header="Abrir minimizado (icono en la barra de tareas)"
+                                    Header="Iniciar oculto en la bandeja del sistema"
                                     IsEnabled="{x:Bind ViewModel.AutoInicioHabilitado, Mode=OneWay}"
                                     IsOn="{x:Bind ViewModel.AutoInicioMinimizado, Mode=TwoWay}" />
+                                <ToggleSwitch
+                                    Header="Iniciar sincronización al encender Windows"
+                                    IsEnabled="{x:Bind ViewModel.AutoInicioHabilitado, Mode=OneWay}"
+                                    IsOn="{x:Bind ViewModel.AutoInicioIniciarDemonio, Mode=TwoWay}" />
                             </StackPanel>
                         </Border>
 

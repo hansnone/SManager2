@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace SManager.Gui.WinUI.Servicios;
 
@@ -40,12 +41,14 @@ public static class ServicioInstanciaUnica
     {
         try
         {
+            // Evento nombrado: funciona aunque la ventana principal esté oculta (AppWindow.Hide).
+            ServicioSenalRestaurarVentana.SolicitarRestaurar();
+
             if (ActivarInstanciaPorProceso())
             {
                 return;
             }
 
-            // Respaldo si MainWindowHandle aún no está listo: buscar por título de ventana.
             var handleVentana = BuscarVentanaPorTitulo(TituloVentanaPrincipal);
             if (handleVentana != IntPtr.Zero)
             {
@@ -85,6 +88,11 @@ public static class ServicioInstanciaUnica
                 }
 
                 var handleVentana = proceso.MainWindowHandle;
+                if (handleVentana == IntPtr.Zero)
+                {
+                    handleVentana = BuscarVentanaDelProceso(proceso.Id, TituloVentanaPrincipal);
+                }
+
                 if (handleVentana == IntPtr.Zero)
                 {
                     continue;
@@ -146,4 +154,58 @@ public static class ServicioInstanciaUnica
 
     private static void MostrarVentana(IntPtr handleVentana, int comando) =>
         ShowWindow(handleVentana, comando);
+
+    private static IntPtr BuscarVentanaDelProceso(int idProceso, string tituloEsperado)
+    {
+        IntPtr encontrado = IntPtr.Zero;
+        EnumWindows((handle, _) =>
+        {
+            ObtenerIdProcesoVentana(handle, out var idVentana);
+            if (idVentana != idProceso)
+            {
+                return true;
+            }
+
+            var longitud = ObtenerLongitudTituloVentana(handle);
+            if (longitud <= 0)
+            {
+                return true;
+            }
+
+            var buffer = new StringBuilder(longitud + 1);
+            _ = ObtenerTituloVentana(handle, buffer, buffer.Capacity);
+            if (buffer.ToString().Contains(tituloEsperado, StringComparison.OrdinalIgnoreCase))
+            {
+                encontrado = handle;
+                return false;
+            }
+
+            return true;
+        }, IntPtr.Zero);
+
+        return encontrado;
+    }
+
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowTextLength(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+    private static void ObtenerIdProcesoVentana(IntPtr handle, out uint idProceso) =>
+        GetWindowThreadProcessId(handle, out idProceso);
+
+    private static int ObtenerLongitudTituloVentana(IntPtr handle) =>
+        GetWindowTextLength(handle);
+
+    private static int ObtenerTituloVentana(IntPtr handle, StringBuilder buffer, int maximo) =>
+        GetWindowText(handle, buffer, maximo);
 }

@@ -25,6 +25,8 @@ public sealed partial class MainPage : Page
 
     private bool _bandejaSuscrita;
 
+    private bool _notificacionesSuscritas;
+
     private ArrastradorSeparadorMonitor? _arrastradorSeparadorSuperior;
     private ArrastradorSeparadorMonitor? _arrastradorSeparadorInferior;
 
@@ -55,6 +57,7 @@ public sealed partial class MainPage : Page
         ConfigurarSeparadoresMonitor();
         ControlAsistente.EnlazarViewModel(ViewModel.Asistente);
         SuscribirAccionesBandeja();
+        SuscribirAccionesNotificacion();
     }
 
     /// <summary>Conecta el menú de la bandeja con la ventana y los comandos del ViewModel.</summary>
@@ -72,6 +75,45 @@ public sealed partial class MainPage : Page
         ServicioAccionesBandeja.SalirAplicacionSolicitado += Bandeja_SalirSolicitado;
         _bandejaSuscrita = true;
     }
+
+    /// <summary>Conecta los botones de los toasts con la ventana y la navegación.</summary>
+    private void SuscribirAccionesNotificacion()
+    {
+        if (_notificacionesSuscritas)
+        {
+            return;
+        }
+
+        ServicioAccionesNotificacion.AbrirVentanaSolicitado += Notificacion_AbrirVentanaSolicitada;
+        ServicioAccionesNotificacion.VerDetallesSolicitado += Notificacion_VerDetallesSolicitado;
+        _notificacionesSuscritas = true;
+        ServicioAccionesNotificacion.ReproducirAccionPendiente();
+    }
+
+    private void DesuscribirAccionesNotificacion()
+    {
+        if (!_notificacionesSuscritas)
+        {
+            return;
+        }
+
+        ServicioAccionesNotificacion.AbrirVentanaSolicitado -= Notificacion_AbrirVentanaSolicitada;
+        ServicioAccionesNotificacion.VerDetallesSolicitado -= Notificacion_VerDetallesSolicitado;
+        _notificacionesSuscritas = false;
+    }
+
+    private void Notificacion_AbrirVentanaSolicitada() =>
+        EjecutarEnHiloUi(RestaurarVentanaDesdeBandeja);
+
+    private void Notificacion_VerDetallesSolicitado(string seccion) =>
+        EjecutarEnHiloUi(() =>
+        {
+            RestaurarVentanaDesdeBandeja();
+            SeleccionarSeccionPorTag(NormalizarSeccionNotificacion(seccion));
+        });
+
+    private static string NormalizarSeccionNotificacion(string seccion) =>
+        string.IsNullOrWhiteSpace(seccion) ? "registro" : seccion.Trim().ToLowerInvariant();
 
     private void DesuscribirAccionesBandeja()
     {
@@ -157,6 +199,7 @@ public sealed partial class MainPage : Page
         _cierreVentanaAutorizado = true;
         App.Window.AppWindow.Closing -= AppWindow_Closing;
         DesuscribirAccionesBandeja();
+        DesuscribirAccionesNotificacion();
         ViewModel.Dispose();
         App.Window.Close();
     }
@@ -230,6 +273,7 @@ public sealed partial class MainPage : Page
         _cierreVentanaAutorizado = true;
         App.Window.AppWindow.Closing -= AppWindow_Closing;
         DesuscribirAccionesBandeja();
+        DesuscribirAccionesNotificacion();
         ViewModel.Dispose();
         App.Window.Close();
     }

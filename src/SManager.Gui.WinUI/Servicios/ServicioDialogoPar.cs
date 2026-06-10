@@ -22,8 +22,13 @@ public static class ServicioDialogoPar
             DefaultButton = ContentDialogButton.Primary,
             Content = formulario,
             XamlRoot = App.Window.Content.XamlRoot,
-            IsPrimaryButtonEnabled = formulario.EsValido()
+            IsPrimaryButtonEnabled = formulario.EsValido(),
+            HorizontalContentAlignment = HorizontalAlignment.Stretch
         };
+
+        // Por defecto el diálogo capa ~548 px de ancho y recortaba botones a la derecha del formulario.
+        cuadro.Resources["ContentDialogMaxWidth"] = 640.0;
+        cuadro.Resources["ContentDialogMinWidth"] = 480.0;
 
         formulario.ValidezCambiada += (_, _) =>
             cuadro.IsPrimaryButtonEnabled = formulario.EsValido();
