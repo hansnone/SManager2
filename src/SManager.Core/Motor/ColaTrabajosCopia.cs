@@ -9,11 +9,13 @@ namespace SManager.Core.Motor;
 /// </summary>
 public sealed class ColaTrabajosCopia
 {
+    public const int CapacidadPorDefecto = 50_000;
+
     private readonly Channel<TrabajoCopia> _canal;
     private readonly ConcurrentDictionary<string, byte> _rutasPendientes =
         new(StringComparer.OrdinalIgnoreCase);
 
-    public ColaTrabajosCopia(int capacidad = 10_000)
+    public ColaTrabajosCopia(int capacidad = CapacidadPorDefecto)
     {
         _canal = Channel.CreateBounded<TrabajoCopia>(new BoundedChannelOptions(capacidad)
         {
@@ -25,22 +27,22 @@ public sealed class ColaTrabajosCopia
 
     public int PendientesEnCola => _rutasPendientes.Count;
 
-    public bool IntentarEncolar(TrabajoCopia trabajo, MetricasMotor metricas)
+    public ResultadoEncoladoCopia IntentarEncolar(TrabajoCopia trabajo, MetricasMotor metricas)
     {
         var clave = NormalizarRuta(trabajo.RutaCompleta);
         if (!_rutasPendientes.TryAdd(clave, 0))
         {
             metricas.IncrementarDuplicadosEvitados();
-            return false;
+            return ResultadoEncoladoCopia.DuplicadoEnCola;
         }
 
         if (!_canal.Writer.TryWrite(trabajo with { RutaCompleta = clave }))
         {
             _rutasPendientes.TryRemove(clave, out _);
-            return false;
+            return ResultadoEncoladoCopia.ColaLlena;
         }
 
-        return true;
+        return ResultadoEncoladoCopia.Encolado;
     }
 
     public async ValueTask<TrabajoCopia> LeerAsync(CancellationToken cancelacion)

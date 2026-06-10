@@ -1,3 +1,4 @@
+using SManager.Core.Copia;
 using SManager.Core.Modelos;
 using SManager.Core.Motor;
 using SManager.Core.Utilidades;
@@ -13,6 +14,7 @@ public sealed class VigiaPar : IAsyncDisposable
 {
     private const int UmbralRafaga = 80;
     private const int BufferFswBytes = 65536;
+    private static readonly TimeSpan IntervaloAvisoColaLlena = TimeSpan.FromSeconds(60);
 
     private readonly EstadoMotor _estado;
     private readonly string _idPar;
@@ -24,6 +26,14 @@ public sealed class VigiaPar : IAsyncDisposable
     private readonly object _candadoPendientes = new();
     private readonly Queue<string> _colaEventos = new();
     private readonly object _candadoEventos = new();
+    private readonly Dictionary<string, DateTime> _ultimoAvisoColaLlena = new(StringComparer.OrdinalIgnoreCase);
+
+    private enum ResultadoRegistro
+    {
+        Ignorado,
+        YaSincronizado,
+        Candidato
+    }
 
     public string IdPar => _idPar;
 
@@ -85,12 +95,12 @@ public sealed class VigiaPar : IAsyncDisposable
                     {
                         if (solicitaEscaneo)
                         {
-                            _estado.EncolarLog(_idPar, "INFO", "Polling de seguridad: escaneo completo");
+                            _estado.EncolarLog(_idPar, "INFO", "Polling de seguridad: escaneo diferencial");
                             _estado.PeticionEscaneoCompleto[_idPar] = false;
                         }
                         else if (rafaga >= UmbralRafaga)
                         {
-                            _estado.EncolarLog(_idPar, "INFO", $"Ráfaga FSW ({rafaga} eventos): escaneo completo de rescate");
+                            _estado.EncolarLog(_idPar, "INFO", $"Ráfaga FSW ({rafaga} eventos): escaneo de rescate");
                         }
 
                         await EscaneoCompletoAsync(par, cancelacion).ConfigureAwait(false);
@@ -228,12 +238,15 @@ public sealed class VigiaPar : IAsyncDisposable
         return rafaga;
     }
 
-    /// <returns>true si el archivo pasó filtros y quedó pendiente de estabilidad o hidratación.</returns>
-    private bool RegistrarCandidato(string rutaCompleta, ParSincronizacion par)
+    /// <returns>Clasificación del archivo tras filtros y comparación con destino.</returns>
+    private ResultadoRegistro RegistrarCandidato(
+        string rutaCompleta,
+        ParSincronizacion par,
+        IndiceMetadatosDestino? indiceDestino = null)
     {
         if (!_estado.AceptarNuevosTrabajos)
         {
-            return false;
+            return ResultadoRegistro.Ignorado;
         }
 
         FileInfo? info;
@@ -250,7 +263,7 @@ public sealed class VigiaPar : IAsyncDisposable
                     }
                 }
 
-                return false;
+                return ResultadoRegistro.Ignorado;
             }
         }
         catch
@@ -262,20 +275,20 @@ public sealed class VigiaPar : IAsyncDisposable
                     _pendientes.TryAdd(rutaCompleta, new SeguimientoEstabilidad());
                 }
 
-                return true;
+                return ResultadoRegistro.Candidato;
             }
 
-            return false;
+            return ResultadoRegistro.Ignorado;
         }
 
         if (info.Attributes.HasFlag(FileAttributes.Directory))
         {
-            return false;
+            return ResultadoRegistro.Ignorado;
         }
 
         if (!ServicioFiltros.PasaFiltros(info.Name, par))
         {
-            return false;
+            return ResultadoRegistro.Ignorado;
         }
 
         if (OneDrivePlaceholder.EsPlaceholder(info.Attributes))
@@ -290,7 +303,18 @@ public sealed class VigiaPar : IAsyncDisposable
                 }
             }
 
-            return true;
+            return ResultadoRegistro.Candidato;
+        }
+
+        // Escaneo/polling: omitir archivos ya alineados con el destino (evita llenar la cola).
+        if (!ComparadorSincronizacion.NecesitaCopia(info, par, indiceDestino))
+        {
+            lock (_candadoPendientes)
+            {
+                _pendientes.Remove(info.FullName);
+            }
+
+            return ResultadoRegistro.YaSincronizado;
         }
 
         lock (_candadoPendientes)
@@ -299,7 +323,7 @@ public sealed class VigiaPar : IAsyncDisposable
                 && prev.Tamano == info.Length
                 && prev.MtimeUtc == info.LastWriteTimeUtc)
             {
-                return true;
+                return ResultadoRegistro.Candidato;
             }
 
             _pendientes[info.FullName] = new SeguimientoEstabilidad
@@ -309,7 +333,7 @@ public sealed class VigiaPar : IAsyncDisposable
             };
         }
 
-        return true;
+        return ResultadoRegistro.Candidato;
     }
 
     private void ProcesarPendientesEstables(ParSincronizacion par, double segundosRequeridos)
@@ -380,20 +404,25 @@ public sealed class VigiaPar : IAsyncDisposable
                         continue;
                     }
 
-                    var encolado = _estado.ColaCopia.IntentarEncolar(
+                    if (!ComparadorSincronizacion.NecesitaCopia(info, par))
+                    {
+                        aEliminar.Add(clave);
+                        continue;
+                    }
+
+                    var resultado = _estado.ColaCopia.IntentarEncolar(
                         new TrabajoCopia(par.IdPar, clave),
                         _estado.Metricas);
 
-                    if (encolado)
+                    switch (resultado)
                     {
-                        aEliminar.Add(clave);
-                    }
-                    else
-                    {
-                        _estado.EncolarLog(
-                            _idPar,
-                            "WARN",
-                            $"Cola de copia llena; reintentando: {Path.GetFileName(clave)}");
+                        case ResultadoEncoladoCopia.Encolado:
+                        case ResultadoEncoladoCopia.DuplicadoEnCola:
+                            aEliminar.Add(clave);
+                            break;
+                        case ResultadoEncoladoCopia.ColaLlena:
+                            RegistrarAvisoColaLlena(clave);
+                            break;
                     }
                 }
             }
@@ -413,9 +442,35 @@ public sealed class VigiaPar : IAsyncDisposable
             return;
         }
 
-        _estado.EncolarLog(_idPar, "INFO", "Escaneo diferencial (solo encolado)...");
+        _estado.EncolarLog(_idPar, "INFO", "Escaneo diferencial (origen vs destino)...");
+
+        var inicioIndice = DateTime.UtcNow;
+        IndiceMetadatosDestino? indiceDestino = null;
+        try
+        {
+            indiceDestino = IndiceMetadatosDestino.Construir(par, cancelacion);
+            var segundosIndice = (DateTime.UtcNow - inicioIndice).TotalSeconds;
+            _estado.EncolarLog(
+                _idPar,
+                "INFO",
+                $"Índice de destino: {indiceDestino.CantidadArchivos} archivos ({segundosIndice:F1} s)");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _estado.EncolarLog(
+                _idPar,
+                "WARN",
+                $"Índice de destino no disponible; comparación archivo a archivo: {ex.Message}");
+        }
+
         var revisados = 0;
         var candidatos = 0;
+        var yaSincronizados = 0;
+        var ignorados = 0;
 
         foreach (var archivo in Directory.EnumerateFiles(par.RutaOrigen, "*", SearchOption.AllDirectories))
         {
@@ -428,9 +483,17 @@ public sealed class VigiaPar : IAsyncDisposable
             try
             {
                 revisados++;
-                if (RegistrarCandidato(archivo, par))
+                switch (RegistrarCandidato(archivo, par, indiceDestino))
                 {
-                    candidatos++;
+                    case ResultadoRegistro.Candidato:
+                        candidatos++;
+                        break;
+                    case ResultadoRegistro.YaSincronizado:
+                        yaSincronizados++;
+                        break;
+                    default:
+                        ignorados++;
+                        break;
                 }
             }
             catch (Exception ex)
@@ -439,15 +502,35 @@ public sealed class VigiaPar : IAsyncDisposable
             }
         }
 
-        var ignorados = revisados - candidatos;
         _estado.EncolarLog(_idPar, "INFO",
-            $"Escaneo: {revisados} revisados, {candidatos} candidatos, {ignorados} ignorados (filtro/carpetas)");
-        if (revisados > 0 && candidatos == 0)
+            $"Escaneo: {revisados} revisados, {candidatos} pendientes, {yaSincronizados} ya sincronizados, {ignorados} ignorados");
+        if (revisados > 0 && candidatos == 0 && yaSincronizados == 0)
         {
             _estado.EncolarLog(_idPar, "WARN",
                 $"Ningún archivo pasó el filtro de inclusión '{par.FiltroInclusion}'. Revisa la columna Inclusion en la GUI.");
         }
         await Task.CompletedTask.ConfigureAwait(false);
+    }
+
+    /// <summary>Evita miles de WARN idénticos por segundo cuando la cola está saturada.</summary>
+    private void RegistrarAvisoColaLlena(string rutaCompleta)
+    {
+        var ahora = DateTime.UtcNow;
+        lock (_candadoPendientes)
+        {
+            if (_ultimoAvisoColaLlena.TryGetValue(rutaCompleta, out var previo)
+                && ahora - previo < IntervaloAvisoColaLlena)
+            {
+                return;
+            }
+
+            _ultimoAvisoColaLlena[rutaCompleta] = ahora;
+        }
+
+        _estado.EncolarLog(
+            _idPar,
+            "WARN",
+            $"Cola de copia llena; reintentando: {Path.GetFileName(rutaCompleta)}");
     }
 
     public async ValueTask DisposeAsync()
