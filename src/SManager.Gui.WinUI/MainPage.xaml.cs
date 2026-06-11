@@ -30,10 +30,19 @@ public sealed partial class MainPage : Page
     private ArrastradorSeparadorMonitor? _arrastradorSeparadorSuperior;
     private ArrastradorSeparadorMonitor? _arrastradorSeparadorInferior;
 
+    private ArrastradorSeparadorColumnas? _arrRegistroHoraPar;
+    private ArrastradorSeparadorColumnas? _arrRegistroParNivel;
+    private ArrastradorSeparadorColumnas? _arrRegistroNivelMensaje;
+    private ArrastradorSeparadorColumnas? _arrMonitorNombreEstado;
+    private ArrastradorSeparadorColumnas? _arrMonitorEstadoTamano;
+    private ArrastradorSeparadorColumnas? _arrMonitorTamanoCopiados;
+    private ArrastradorSeparadorColumnas? _arrMonitorCopiadosErrores;
+
     public MainPage()
     {
         InitializeComponent();
         DataContext = ViewModel;
+        ControlAsistente.ViewModel = ViewModel.Asistente;
         ViewModel.RegistroDesplazarAlFinalSolicitado += ViewModel_RegistroDesplazarAlFinalSolicitado;
         ViewModel.ModoInterfazCambiado += ViewModel_ModoInterfazCambiado;
         Loaded += MainPage_Loaded;
@@ -55,7 +64,8 @@ public sealed partial class MainPage : Page
         MostrarSeccion("inicio");
         App.Window.AppWindow.Closing += AppWindow_Closing;
         ConfigurarSeparadoresMonitor();
-        ControlAsistente.EnlazarViewModel(ViewModel.Asistente);
+        ConfigurarColumnasRegistro();
+        ConfigurarColumnasMonitor();
         SuscribirAccionesBandeja();
         SuscribirAccionesNotificacion();
     }
@@ -230,6 +240,153 @@ public sealed partial class MainPage : Page
             indiceFilaInferior: 5,
             GuardarPreferencias);
         _arrastradorSeparadorInferior.Enlazar(SeparadorMonitorInferior);
+    }
+
+    /// <summary>Enlaza separadores verticales de la cabecera del registro de actividad.</summary>
+    private void ConfigurarColumnasRegistro()
+    {
+        void Guardar() => ViewModel.GuardarPreferenciasColumnas();
+
+        _arrRegistroHoraPar = new ArrastradorSeparadorColumnas(
+            CabeceraRegistro,
+            ColRegistroHora,
+            ColRegistroPar,
+            (izq, der) =>
+            {
+                ViewModel.AnchoRegistroHora = izq;
+                ViewModel.AnchoRegistroPar = der;
+            },
+            Guardar);
+        _arrRegistroHoraPar.Enlazar(SepRegistroHoraPar);
+
+        _arrRegistroParNivel = new ArrastradorSeparadorColumnas(
+            CabeceraRegistro,
+            ColRegistroPar,
+            ColRegistroNivel,
+            (izq, der) =>
+            {
+                ViewModel.AnchoRegistroPar = izq;
+                ViewModel.AnchoRegistroNivel = der;
+            },
+            Guardar);
+        _arrRegistroParNivel.Enlazar(SepRegistroParNivel);
+
+        _arrRegistroNivelMensaje = new ArrastradorSeparadorColumnas(
+            CabeceraRegistro,
+            ColRegistroNivel,
+            ColRegistroMensaje,
+            (izq, der) =>
+            {
+                ViewModel.AnchoRegistroNivel = izq;
+                ViewModel.AnchoRegistroMensaje = der;
+            },
+            Guardar);
+        _arrRegistroNivelMensaje.Enlazar(SepRegistroNivelMensaje);
+    }
+
+    /// <summary>Enlaza separadores verticales de la tabla de pares del monitor.</summary>
+    private void ConfigurarColumnasMonitor()
+    {
+        void Guardar() => ViewModel.GuardarPreferenciasColumnas();
+
+        _arrMonitorNombreEstado = new ArrastradorSeparadorColumnas(
+            CabeceraMonitorPares,
+            ColMonitorNombre,
+            ColMonitorEstado,
+            (izq, der) =>
+            {
+                ViewModel.AnchoMonitorNombre = izq;
+                ViewModel.AnchoMonitorEstado = der;
+            },
+            Guardar);
+        _arrMonitorNombreEstado.Enlazar(SepMonitorNombreEstado);
+
+        _arrMonitorEstadoTamano = new ArrastradorSeparadorColumnas(
+            CabeceraMonitorPares,
+            ColMonitorEstado,
+            ColMonitorTamanoDestino,
+            (izq, der) =>
+            {
+                ViewModel.AnchoMonitorEstado = izq;
+                ViewModel.AnchoMonitorTamanoDestino = der;
+            },
+            Guardar);
+        _arrMonitorEstadoTamano.Enlazar(SepMonitorEstadoTamano);
+
+        _arrMonitorTamanoCopiados = new ArrastradorSeparadorColumnas(
+            CabeceraMonitorPares,
+            ColMonitorTamanoDestino,
+            ColMonitorCopiados,
+            (izq, der) =>
+            {
+                ViewModel.AnchoMonitorTamanoDestino = izq;
+                ViewModel.AnchoMonitorCopiados = der;
+            },
+            Guardar);
+        _arrMonitorTamanoCopiados.Enlazar(SepMonitorTamanoCopiados);
+
+        _arrMonitorCopiadosErrores = new ArrastradorSeparadorColumnas(
+            CabeceraMonitorPares,
+            ColMonitorCopiados,
+            ColMonitorErrores,
+            (izq, der) =>
+            {
+                ViewModel.AnchoMonitorCopiados = izq;
+                ViewModel.AnchoMonitorErrores = der;
+            },
+            Guardar);
+        _arrMonitorCopiadosErrores.Enlazar(SepMonitorCopiadosErrores);
+    }
+
+    /// <summary>Captura el panel oculto de pares OK y lo guarda como PNG o JPG.</summary>
+    private async void ExportarParesActivos_Click(object sender, RoutedEventArgs e)
+    {
+        ViewModel.PrepararExportacionParesActivos();
+
+        if (ViewModel.ParesExportacionImagen.Count == 0)
+        {
+            var aviso = new ContentDialog
+            {
+                Title = "Sin pares funcionando",
+                Content = "No hay pares en estado OK con el demonio en ejecución. Inicia la sincronización y espera a que al menos un par esté activo.",
+                CloseButtonText = "Entendido",
+                XamlRoot = XamlRoot
+            };
+            await aviso.ShowAsync();
+            return;
+        }
+
+        try
+        {
+            var guardado = await ServicioExportarImagen.ExportarAsync(
+                PanelExportacionParesActivos,
+                $"pares-funcionando-{DateTime.Now:yyyyMMdd-HHmm}");
+
+            if (!guardado)
+            {
+                return;
+            }
+
+            var confirmacion = new ContentDialog
+            {
+                Title = "Imagen guardada",
+                Content = "La captura se guardó correctamente.",
+                CloseButtonText = "Entendido",
+                XamlRoot = XamlRoot
+            };
+            await confirmacion.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            var error = new ContentDialog
+            {
+                Title = "No se pudo exportar",
+                Content = ex.Message,
+                CloseButtonText = "Entendido",
+                XamlRoot = XamlRoot
+            };
+            await error.ShowAsync();
+        }
     }
 
     private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)

@@ -105,6 +105,9 @@ public partial class AsistenteOnboardingViewModel : ObservableObject
 
     public string TextoBotonPrincipal => EsUltimoPaso ? "Crear par" : "Siguiente";
 
+    /// <summary>InfoBar.IsOpen exige bool, no Visibility.</summary>
+    public bool MostrarAvisosRiesgo => !string.IsNullOrWhiteSpace(TextoAvisosRiesgo);
+
     /// <summary>El ViewModel principal se suscribe para aplicar el resultado.</summary>
     public event Func<ResultadoAsistenteOnboarding, Task>? FinalizadoSolicitado;
 
@@ -131,6 +134,9 @@ public partial class AsistenteOnboardingViewModel : ObservableObject
             ActualizarAvisosRiesgo();
         }
     }
+
+    partial void OnTextoAvisosRiesgoChanged(string value) =>
+        OnPropertyChanged(nameof(MostrarAvisosRiesgo));
 
     partial void OnPlantillaSeleccionadaChanged(PlantillaParEjemplo? value) => AplicarPlantilla(value);
 

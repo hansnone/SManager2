@@ -8,6 +8,8 @@ public sealed class ServicioBandejaSistema : IDisposable
 {
     private NotifyIcon? _iconoBandeja;
     private ContextMenuStrip? _menuContextual;
+    private ToolStripMenuItem? _itemIniciar;
+    private ToolStripMenuItem? _itemDetener;
     private bool _puedeIniciar = true;
     private bool _puedeDetener;
     private string _textoTooltip = "SManager 2.0";
@@ -31,6 +33,7 @@ public sealed class ServicioBandejaSistema : IDisposable
         };
 
         _iconoBandeja.DoubleClick += (_, _) => ServicioAccionesBandeja.SolicitarAbrirVentana();
+        AplicarEstadoEnMenu();
     }
 
     public void ActualizarEstado(string textoTooltip, bool puedeIniciar, bool puedeDetener)
@@ -45,7 +48,9 @@ public sealed class ServicioBandejaSistema : IDisposable
         }
 
         _iconoBandeja.Text = RecortarTooltip(_textoTooltip);
-        ReconstruirMenuContextual();
+
+        // No reconstruir el menú en cada tick del monitor: destruye el popup mientras el usuario hace clic derecho.
+        AplicarEstadoEnMenu();
     }
 
     public void Dispose()
@@ -59,61 +64,56 @@ public sealed class ServicioBandejaSistema : IDisposable
 
         _menuContextual?.Dispose();
         _menuContextual = null;
+        _itemIniciar = null;
+        _itemDetener = null;
     }
 
     private ContextMenuStrip CrearMenuContextual()
     {
         var menu = new ContextMenuStrip();
-        AgregarEntradasMenu(menu);
-        return menu;
-    }
 
-    private void ReconstruirMenuContextual()
-    {
-        if (_iconoBandeja is null)
-        {
-            return;
-        }
-
-        _menuContextual?.Dispose();
-        _menuContextual = CrearMenuContextual();
-        _iconoBandeja.ContextMenuStrip = _menuContextual;
-    }
-
-    private void AgregarEntradasMenu(ContextMenuStrip menu)
-    {
         menu.Items.Add(new ToolStripLabel("SManager 2.0") { Enabled = false });
         menu.Items.Add(new ToolStripSeparator());
 
         menu.Items.Add("Abrir SManager", null, (_, _) => ServicioAccionesBandeja.SolicitarAbrirVentana());
 
-        var itemIniciar = new ToolStripMenuItem("Sincronizar ahora", null, (_, _) =>
+        _itemIniciar = new ToolStripMenuItem("Sincronizar ahora", null, (_, _) =>
         {
             if (_puedeIniciar)
             {
                 ServicioAccionesBandeja.SolicitarIniciar();
             }
-        })
-        {
-            Enabled = _puedeIniciar
-        };
-        menu.Items.Add(itemIniciar);
+        });
+        menu.Items.Add(_itemIniciar);
 
-        var itemDetener = new ToolStripMenuItem("Detener sincronización", null, (_, _) =>
+        _itemDetener = new ToolStripMenuItem("Detener sincronización", null, (_, _) =>
         {
             if (_puedeDetener)
             {
                 ServicioAccionesBandeja.SolicitarDetener();
             }
-        })
-        {
-            Enabled = _puedeDetener
-        };
-        menu.Items.Add(itemDetener);
+        });
+        menu.Items.Add(_itemDetener);
 
         menu.Items.Add("Ver actividad (Monitor)", null, (_, _) => ServicioAccionesBandeja.SolicitarVerMonitor());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Salir", null, (_, _) => ServicioAccionesBandeja.SolicitarSalir());
+
+        return menu;
+    }
+
+    /// <summary>Actualiza tooltip y habilitación sin recrear el menú contextual.</summary>
+    private void AplicarEstadoEnMenu()
+    {
+        if (_itemIniciar is not null)
+        {
+            _itemIniciar.Enabled = _puedeIniciar;
+        }
+
+        if (_itemDetener is not null)
+        {
+            _itemDetener.Enabled = _puedeDetener;
+        }
     }
 
     private static string RecortarTooltip(string texto) =>

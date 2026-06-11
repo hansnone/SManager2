@@ -38,6 +38,15 @@ public partial class ParFilaViewModel : ObservableObject
 
     public int TotalErrores { get; set; }
 
+    [ObservableProperty]
+    private long _tamanoDestinoBytes;
+
+    [ObservableProperty]
+    private string _tamanoDestinoTexto = "—";
+
+    [ObservableProperty]
+    private bool _tamanoDestinoCalculando;
+
     /// <summary>True si hay avisos de riesgo en la configuración del par.</summary>
     public bool TieneAvisosRiesgo => AvisosRiesgo.Count > 0;
 
@@ -76,7 +85,12 @@ public partial class ParFilaViewModel : ObservableObject
 
     partial void OnRutaOrigenChanged(string value) => NotificarResumen();
 
-    partial void OnRutaDestinoChanged(string value) => NotificarResumen();
+    partial void OnRutaDestinoChanged(string value)
+    {
+        NotificarResumen();
+        TamanoDestinoTexto = "—";
+        TamanoDestinoBytes = 0;
+    }
 
     partial void OnNombreChanged(string value) => OnPropertyChanged(nameof(EtiquetaEstadoActividad));
 

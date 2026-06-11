@@ -51,6 +51,13 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
     public ObservableCollection<ParFilaViewModel> Pares { get; } = [];
     public ObservableCollection<LineaRegistroViewModel> LineasRegistro { get; } = [];
     public ObservableCollection<MonitorParViewModel> MonitorPares { get; } = [];
+
+    /// <summary>Pares con estado OK mientras el demonio está activo (para exportar imagen).</summary>
+    public ObservableCollection<MonitorParViewModel> MonitorParesFuncionando { get; } = [];
+
+    /// <summary>Instantánea enriquecida para la captura PNG/JPG (origen + destino + estadísticas).</summary>
+    public ObservableCollection<ParExportacionImagenViewModel> ParesExportacionImagen { get; } = [];
+
     public ObservableCollection<CopiaEnCursoViewModel> CopiasEnCurso { get; } = [];
     public ObservableCollection<ActividadViewModel> ActividadReciente { get; } = [];
 
@@ -252,6 +259,57 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
 
     private ServicioBandejaSistema? _bandeja;
 
+    private readonly ServicioTamanoDirectorio _servicioTamanoDirectorio = new();
+    private CancellationTokenSource? _cancelacionTamanosDestino;
+    private PreferenciasColumnasDto _preferenciasColumnas = new();
+    private DispatcherQueueTimer? _temporizadorRecalculoTamanos;
+    private DateTimeOffset _ultimoRecalculoTamanosAutomatico = DateTimeOffset.MinValue;
+
+    /// <summary>Espera tras detener el demonio antes de recalcular (deja que el SO libere handles).</summary>
+    private static readonly TimeSpan RetardoRecalculoTrasSesion = TimeSpan.FromSeconds(30);
+
+    /// <summary>Evita recalcular en cada parada breve o reinicio seguido.</summary>
+    private static readonly TimeSpan IntervaloMinimoRecalculoAutomatico = TimeSpan.FromMinutes(5);
+
+    /// <summary>Pausa entre pares en recálculo automático (reduce presión en NAS).</summary>
+    private static readonly TimeSpan PausaEntreParesRecalculoAutomatico = TimeSpan.FromMilliseconds(400);
+
+    [ObservableProperty]
+    private double _anchoRegistroHora = 140;
+
+    [ObservableProperty]
+    private double _anchoRegistroPar = 120;
+
+    [ObservableProperty]
+    private double _anchoRegistroNivel = 72;
+
+    [ObservableProperty]
+    private double _anchoRegistroMensaje = 360;
+
+    [ObservableProperty]
+    private double _anchoMonitorNombre = 160;
+
+    [ObservableProperty]
+    private double _anchoMonitorEstado = 100;
+
+    [ObservableProperty]
+    private double _anchoMonitorTamanoDestino = 120;
+
+    [ObservableProperty]
+    private double _anchoMonitorCopiados = 88;
+
+    [ObservableProperty]
+    private double _anchoMonitorErrores = 72;
+
+    [ObservableProperty]
+    private string _textoExportacionPerfil = string.Empty;
+
+    [ObservableProperty]
+    private string _textoExportacionFecha = string.Empty;
+
+    [ObservableProperty]
+    private bool _calculandoTamanosDestino;
+
     private readonly ServicioMonitorNotificaciones _monitorNotificaciones = new();
 
     private bool _cargandoPreferenciasGui;
@@ -324,6 +382,7 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
             _temporizador.Tick += async (_, _) => await ActualizarVistaAsync();
         }
 
+        CargarPreferenciasColumnas();
         CargarListaPerfiles();
         CargarConfiguracionPerfilActual();
         CargarPreferenciasAutoInicio();
@@ -1652,7 +1711,183 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         ActualizarFiltrosParRegistro();
         ActualizarEstadoVacioPares();
         ActualizarPanelInicio(null);
+        _ = ActualizarTamanosDestinoInternoAsync(forzar: true);
     }
+
+    private void CargarPreferenciasColumnas()
+    {
+        _preferenciasColumnas = ServicioPreferenciasColumnas.Cargar();
+        AnchoRegistroHora = _preferenciasColumnas.RegistroHora;
+        AnchoRegistroPar = _preferenciasColumnas.RegistroPar;
+        AnchoRegistroNivel = _preferenciasColumnas.RegistroNivel;
+        AnchoRegistroMensaje = _preferenciasColumnas.RegistroMensaje;
+        AnchoMonitorNombre = _preferenciasColumnas.MonitorNombre;
+        AnchoMonitorEstado = _preferenciasColumnas.MonitorEstado;
+        AnchoMonitorTamanoDestino = _preferenciasColumnas.MonitorTamanoDestino;
+        AnchoMonitorCopiados = _preferenciasColumnas.MonitorCopiados;
+        AnchoMonitorErrores = _preferenciasColumnas.MonitorErrores;
+    }
+
+    /// <summary>Persiste anchos de columnas tras arrastrar un separador.</summary>
+    public void GuardarPreferenciasColumnas()
+    {
+        _preferenciasColumnas.RegistroHora = AnchoRegistroHora;
+        _preferenciasColumnas.RegistroPar = AnchoRegistroPar;
+        _preferenciasColumnas.RegistroNivel = AnchoRegistroNivel;
+        _preferenciasColumnas.RegistroMensaje = AnchoRegistroMensaje;
+        _preferenciasColumnas.MonitorNombre = AnchoMonitorNombre;
+        _preferenciasColumnas.MonitorEstado = AnchoMonitorEstado;
+        _preferenciasColumnas.MonitorTamanoDestino = AnchoMonitorTamanoDestino;
+        _preferenciasColumnas.MonitorCopiados = AnchoMonitorCopiados;
+        _preferenciasColumnas.MonitorErrores = AnchoMonitorErrores;
+        ServicioPreferenciasColumnas.Guardar(_preferenciasColumnas);
+    }
+
+    /// <summary>Recalcula el tamaño en disco de cada carpeta destino (puede tardar en NAS).</summary>
+    [RelayCommand]
+    private Task ActualizarTamanosDestinoAsync() =>
+        ActualizarTamanosDestinoInternoAsync(forzar: true);
+
+    /// <param name="forzar">True si lo pidió el usuario; ignora throttle entre sesiones.</param>
+    private async Task ActualizarTamanosDestinoInternoAsync(bool forzar = false)
+    {
+        if (!forzar)
+        {
+            var transcurrido = DateTimeOffset.UtcNow - _ultimoRecalculoTamanosAutomatico;
+            if (transcurrido < IntervaloMinimoRecalculoAutomatico)
+            {
+                return;
+            }
+        }
+
+        _cancelacionTamanosDestino?.Cancel();
+        _cancelacionTamanosDestino = new CancellationTokenSource();
+        var cancelacion = _cancelacionTamanosDestino.Token;
+
+        CalculandoTamanosDestino = true;
+
+        try
+        {
+            foreach (var par in Pares.ToList())
+            {
+                cancelacion.ThrowIfCancellationRequested();
+
+                par.TamanoDestinoCalculando = true;
+                par.TamanoDestinoTexto = "Calculando…";
+
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(par.RutaDestino) || !Directory.Exists(par.RutaDestino))
+                    {
+                        par.TamanoDestinoBytes = 0;
+                        par.TamanoDestinoTexto = "No existe";
+                    }
+                    else
+                    {
+                        var bytes = await _servicioTamanoDirectorio.CalcularAsync(par.RutaDestino, cancelacion);
+                        par.TamanoDestinoBytes = bytes;
+                        par.TamanoDestinoTexto = ServicioFormateoEstadisticas.FormatearBytes(bytes);
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    par.TamanoDestinoTexto = "—";
+                    throw;
+                }
+                catch
+                {
+                    par.TamanoDestinoTexto = "No disponible";
+                }
+                finally
+                {
+                    par.TamanoDestinoCalculando = false;
+                }
+
+                // En automático, espaciar pares para no saturar el disco de destino.
+                if (!forzar && Pares.Count > 1)
+                {
+                    await Task.Delay(PausaEntreParesRecalculoAutomatico, cancelacion);
+                }
+            }
+
+            if (!forzar)
+            {
+                _ultimoRecalculoTamanosAutomatico = DateTimeOffset.UtcNow;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Nueva petición de cálculo reemplazó la anterior.
+        }
+        finally
+        {
+            CalculandoTamanosDestino = false;
+        }
+    }
+
+    /// <summary>Programa recálculo tras fin de sesión (debounce + throttle).</summary>
+    private void ProgramarRecalculoTamanosTrasSesion()
+    {
+        if (_temporizadorRecalculoTamanos is null)
+        {
+            _temporizadorRecalculoTamanos = App.DispatcherQueue.CreateTimer();
+            _temporizadorRecalculoTamanos.Interval = RetardoRecalculoTrasSesion;
+            _temporizadorRecalculoTamanos.Tick += async (_, _) =>
+            {
+                _temporizadorRecalculoTamanos.Stop();
+                await ActualizarTamanosDestinoInternoAsync(forzar: false);
+            };
+        }
+
+        _temporizadorRecalculoTamanos.Stop();
+        _temporizadorRecalculoTamanos.Start();
+    }
+
+    /// <summary>Actualiza metadatos del panel oculto antes de capturarlo como imagen.</summary>
+    public void PrepararExportacionParesActivos()
+    {
+        TextoExportacionPerfil = PerfilActual();
+        TextoExportacionFecha = DateTime.Now.ToString("g");
+        ActualizarColeccionParesFuncionando();
+        ActualizarParesExportacionImagen();
+    }
+
+    /// <summary>Combina configuración del par (origen/destino/tamaño) con telemetría del monitor.</summary>
+    private void ActualizarParesExportacionImagen()
+    {
+        ParesExportacionImagen.Clear();
+
+        foreach (var monitor in MonitorParesFuncionando)
+        {
+            var config = BuscarParConfiguracion(string.Empty, monitor.Nombre);
+            ParesExportacionImagen.Add(new ParExportacionImagenViewModel
+            {
+                Nombre = monitor.Nombre,
+                RutaOrigen = config?.RutaOrigen ?? "—",
+                RutaDestino = string.IsNullOrWhiteSpace(config?.RutaDestino)
+                    ? monitor.RutaDestino
+                    : config.RutaDestino,
+                TamanoDestinoTexto = config?.TamanoDestinoTexto ?? monitor.TamanoDestinoTexto,
+                Estado = monitor.Estado,
+                Copiados = monitor.Copiados,
+                Errores = monitor.Errores
+            });
+        }
+    }
+
+    private void ActualizarColeccionParesFuncionando()
+    {
+        MonitorParesFuncionando.Clear();
+        foreach (var par in MonitorPares.Where(p => p.EstaFuncionando))
+        {
+            MonitorParesFuncionando.Add(par);
+        }
+    }
+
+    private ParFilaViewModel? BuscarParConfiguracion(string idPar, string nombre) =>
+        Pares.FirstOrDefault(p =>
+            string.Equals(p.IdPar, idPar, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(p.Nombre, nombre, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Vacía paneles que dependen de telemetría IPC en vivo.</summary>
     private void LimpiarVistaTelemetria()
@@ -1660,6 +1895,7 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         TextoResumen = "Demonio detenido — sin telemetría en vivo.";
         TextoPolling = "—";
         MonitorPares.Clear();
+        MonitorParesFuncionando.Clear();
         CopiasEnCurso.Clear();
         ActividadReciente.Clear();
         ActualizarPanelInicio(null);
@@ -1842,6 +2078,7 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
                 _datosSesionActual.BytesEscritos);
             _datosSesionActual = null;
             CargarHistorialSesiones(perfil);
+            ProgramarRecalculoTamanosTrasSesion();
         }
 
         _demonioEstabaEnEjecucion = enEjecucion;
@@ -1911,13 +2148,39 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
                     (indice, fila) =>
                     {
                         var par = estado.Pares[indice];
-                        fila.ActualizarDesde(par.Nombre, par.Estado, par.Copiados, par.Errores);
+                        var config = BuscarParConfiguracion(par.IdPar, par.Nombre);
+                        var rutaDestino = config?.RutaDestino ?? string.Empty;
+                        var tamano = config?.TamanoDestinoTexto ?? "—";
+                        var funcionando = DemonioEnEjecucion
+                            && string.Equals(par.Estado, "OK", StringComparison.OrdinalIgnoreCase);
+                        fila.ActualizarDesde(
+                            par.Nombre,
+                            par.Estado,
+                            rutaDestino,
+                            tamano,
+                            par.Copiados,
+                            par.Errores,
+                            funcionando);
                     },
                     indice =>
                     {
                         var par = estado.Pares[indice];
-                        return MonitorParViewModel.Crear(par.Nombre, par.Estado, par.Copiados, par.Errores);
+                        var config = BuscarParConfiguracion(par.IdPar, par.Nombre);
+                        var rutaDestino = config?.RutaDestino ?? string.Empty;
+                        var tamano = config?.TamanoDestinoTexto ?? "—";
+                        var funcionando = DemonioEnEjecucion
+                            && string.Equals(par.Estado, "OK", StringComparison.OrdinalIgnoreCase);
+                        return MonitorParViewModel.Crear(
+                            par.Nombre,
+                            par.Estado,
+                            rutaDestino,
+                            tamano,
+                            par.Copiados,
+                            par.Errores,
+                            funcionando);
                     });
+
+                ActualizarColeccionParesFuncionando();
 
                 ServicioSincronizacionLista.SincronizarInPlace(
                     CopiasEnCurso,
@@ -2155,6 +2418,9 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        _cancelacionTamanosDestino?.Cancel();
+        _cancelacionTamanosDestino?.Dispose();
+        _temporizadorRecalculoTamanos?.Stop();
         ServicioSenalRestaurarVentana.DetenerEscucha();
         _temporizador?.Stop();
         _bandeja?.Dispose();

@@ -14,7 +14,6 @@
     <UserControl.Resources>
         <conv:BooleanoAVisibilidadConvertidor x:Key="BoolAVis" />
         <conv:PasoAsistenteVisibilidadConvertidor x:Key="PasoAsistenteVis" />
-        <conv:TextoNoVacioAVisibilidadConvertidor x:Key="TextoNoVacioAVis" />
     </UserControl.Resources>
 
     <Border
@@ -105,12 +104,20 @@
                             </StackPanel>
                         </Button>
                         <TextBox Header="Ruta de destino" IsReadOnly="True" Text="{x:Bind ViewModel.RutaDestino, Mode=TwoWay}" />
-                        <InfoBar
-                            IsClosable="False"
-                            IsOpen="{x:Bind ViewModel.TextoAvisosRiesgo, Mode=OneWay, Converter={StaticResource TextoNoVacioAVis}}"
-                            Message="{x:Bind ViewModel.TextoAvisosRiesgo, Mode=OneWay}"
-                            Severity="Warning"
-                            Title="Revisa esta configuración" />
+                        <Border
+                            Padding="10,8"
+                            CornerRadius="4"
+                            Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
+                            BorderBrush="{ThemeResource SystemFillColorCautionBrush}"
+                            BorderThickness="1"
+                            Visibility="{x:Bind ViewModel.MostrarAvisosRiesgo, Mode=OneWay, Converter={StaticResource BoolAVis}}">
+                            <StackPanel Spacing="4">
+                                <TextBlock FontWeight="SemiBold" Text="Revisa esta configuración" />
+                                <TextBlock
+                                    Text="{x:Bind ViewModel.TextoAvisosRiesgo, Mode=OneWay}"
+                                    TextWrapping="WrapWholeWords" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
 
                     <StackPanel

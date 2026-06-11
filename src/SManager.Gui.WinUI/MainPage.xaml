@@ -42,6 +42,7 @@
         <conv:BooleanoAVisibilidadConvertidor x:Key="BoolAVis" />
         <conv:NivelRegistroBrushConvertidor x:Key="NivelRegistroBrush" />
         <conv:EstadoParBrushConvertidor x:Key="EstadoParBrush" />
+        <conv:AnchoColumnaPxConvertidor x:Key="AnchoColumnaPx" />
         <Style x:Key="CabeceraColumna" TargetType="TextBlock">
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="VerticalAlignment" Value="Center" />
@@ -112,6 +113,16 @@
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="Background" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
             <Setter Property="CornerRadius" Value="4" />
+        </Style>
+        <!-- Separador vertical entre columnas redimensionables (Registro / Monitor) -->
+        <Style x:Key="SeparadorColumna" TargetType="Border">
+            <Setter Property="Width" Value="6" />
+            <Setter Property="Margin" Value="0,2" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1,0,0,0" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
         </Style>
     </Page.Resources>
 
@@ -449,6 +460,12 @@
                             Icon="Accept"
                             Label="Validar rutas"
                             Command="{x:Bind ViewModel.ValidarRutasCommand}" />
+                        <AppBarSeparator />
+                        <AppBarButton
+                            Icon="Refresh"
+                            Label="Actualizar tamaños"
+                            Command="{x:Bind ViewModel.ActualizarTamanosDestinoCommand}"
+                            ToolTipService.ToolTip="Recalcula el tamaño en disco de cada carpeta destino" />
                     </CommandBar>
 
                     <Border Grid.Row="2" Style="{StaticResource Tarjeta}" Padding="12">
@@ -567,6 +584,10 @@
                                                                         Text="{x:Bind RutaDestino, Mode=OneWay}"
                                                                         TextTrimming="CharacterEllipsis"
                                                                         ToolTipService.ToolTip="{x:Bind RutaDestino, Mode=OneWay}" />
+                                                                    <TextBlock
+                                                                        FontSize="11"
+                                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                                        Text="{x:Bind TamanoDestinoTexto, Mode=OneWay}" />
                                                                 </StackPanel>
                                                             </Border>
                                                         </StackPanel>
@@ -634,6 +655,9 @@
                                                                 IsTextSelectionEnabled="True"
                                                                 Text="{x:Bind RutaDestino, Mode=OneWay}"
                                                                 TextWrapping="WrapWholeWords" />
+                                                            <TextBlock
+                                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                                Text="{x:Bind TamanoDestinoTexto, Mode=OneWay}" />
                                                         </StackPanel>
                                                     </Border>
                                                     <Grid ColumnSpacing="16">
@@ -683,12 +707,28 @@
                         <RowDefinition x:Name="FilaMonitorActividad" Height="1.4*" MinHeight="72" />
                     </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Row="0" Margin="0,0,0,12" Spacing="4">
-                        <TextBlock Style="{StaticResource TituloSeccion}" Text="Monitor en tiempo real" />
-                        <TextBlock
-                            Style="{StaticResource SubtituloSeccion}"
-                            Text="Arrastra las barras entre paneles para cambiar su altura. Cada lista tiene scroll vertical independiente (rueda del ratón o barra lateral)." />
-                    </StackPanel>
+                    <Grid Grid.Row="0" Margin="0,0,0,12">
+                        <StackPanel Spacing="4">
+                            <TextBlock Style="{StaticResource TituloSeccion}" Text="Monitor en tiempo real" />
+                            <TextBlock
+                                Style="{StaticResource SubtituloSeccion}"
+                                Text="Arrastra las barras entre paneles para cambiar su altura. Cada lista tiene scroll vertical independiente (rueda del ratón o barra lateral)." />
+                        </StackPanel>
+                        <StackPanel
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Spacing="8">
+                            <Button
+                                Click="ExportarParesActivos_Click"
+                                ToolTipService.ToolTip="Guarda una imagen PNG o JPG de los pares en estado OK">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <SymbolIcon Symbol="Camera" />
+                                    <TextBlock Text="Exportar imagen" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
 
                     <!-- Panel: estado por par -->
                     <Grid Grid.Row="1" RowSpacing="6">
@@ -704,41 +744,81 @@
                                     <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
                                 <Grid
-                                    ColumnSpacing="8"
+                                    x:Name="CabeceraMonitorPares"
+                                    ColumnSpacing="0"
                                     Padding="8,6"
                                     Background="{ThemeResource LayerFillColorDefaultBrush}">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="2*" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition
+                                            x:Name="ColMonitorNombre"
+                                            Width="{x:Bind ViewModel.AnchoMonitorNombre, Mode=OneWay, Converter={StaticResource AnchoColumnaPx}}" />
+                                        <ColumnDefinition Width="6" />
+                                        <ColumnDefinition
+                                            x:Name="ColMonitorEstado"
+                                            Width="{x:Bind ViewModel.AnchoMonitorEstado, Mode=OneWay, Converter={StaticResource AnchoColumnaPx}}" />
+                                        <ColumnDefinition Width="6" />
+                                        <ColumnDefinition
+                                            x:Name="ColMonitorTamanoDestino"
+                                            Width="{x:Bind ViewModel.AnchoMonitorTamanoDestino, Mode=OneWay, Converter={StaticResource AnchoColumnaPx}}" />
+                                        <ColumnDefinition Width="6" />
+                                        <ColumnDefinition
+                                            x:Name="ColMonitorCopiados"
+                                            Width="{x:Bind ViewModel.AnchoMonitorCopiados, Mode=OneWay, Converter={StaticResource AnchoColumnaPx}}" />
+                                        <ColumnDefinition Width="6" />
+                                        <ColumnDefinition
+                                            x:Name="ColMonitorErrores"
+                                            Width="{x:Bind ViewModel.AnchoMonitorErrores, Mode=OneWay, Converter={StaticResource AnchoColumnaPx}}" />
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Style="{StaticResource CabeceraColumna}" Text="Nombre" />
-                                    <TextBlock Grid.Column="1" Style="{StaticResource CabeceraColumna}" Text="Estado" />
-                                    <TextBlock Grid.Column="2" Style="{StaticResource CabeceraColumna}" Text="Copiados" />
-                                    <TextBlock Grid.Column="3" Style="{StaticResource CabeceraColumna}" Text="Errores" />
+                                    <Border
+                                        x:Name="SepMonitorNombreEstado"
+                                        Grid.Column="1"
+                                        Style="{StaticResource SeparadorColumna}" />
+                                    <TextBlock Grid.Column="2" Style="{StaticResource CabeceraColumna}" Text="Estado" />
+                                    <Border
+                                        x:Name="SepMonitorEstadoTamano"
+                                        Grid.Column="3"
+                                        Style="{StaticResource SeparadorColumna}" />
+                                    <TextBlock Grid.Column="4" Style="{StaticResource CabeceraColumna}" Text="Tamaño destino" />
+                                    <Border
+                                        x:Name="SepMonitorTamanoCopiados"
+                                        Grid.Column="5"
+                                        Style="{StaticResource SeparadorColumna}" />
+                                    <TextBlock Grid.Column="6" Style="{StaticResource CabeceraColumna}" Text="Copiados" />
+                                    <Border
+                                        x:Name="SepMonitorCopiadosErrores"
+                                        Grid.Column="7"
+                                        Style="{StaticResource SeparadorColumna}" />
+                                    <TextBlock Grid.Column="8" Style="{StaticResource CabeceraColumna}" Text="Errores" />
                                 </Grid>
                                 <ListView
                                     x:Name="ListaMonitorPares"
                                     Grid.Row="1"
                                     Style="{StaticResource ListaMonitor}"
+                                    ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                     ItemsSource="{x:Bind ViewModel.MonitorPares, Mode=OneWay}">
                                     <ListView.ItemTemplate>
                                         <DataTemplate x:DataType="models:MonitorParViewModel">
-                                            <Grid ColumnSpacing="8" Padding="8,4">
+                                            <Grid ColumnSpacing="0" Padding="8,4">
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="2*" />
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="{Binding ElementName=PaginaPrincipal, Path=ViewModel.AnchoMonitorNombre, Mode=OneWay, Converter={StaticResource AnchoColumnaPx}}" />
+                                                    <ColumnDefinition Width="6" />
+                                                    <ColumnDefinition Width="{Binding ElementName=PaginaPrincipal, Path=ViewModel.AnchoMonitorEstado, Mode=OneWay, Converter={StaticResource AnchoColumnaPx}}" />
+                                                    <ColumnDefinition Width="6" />
+                                                    <ColumnDefinition Width="{Binding ElementName=PaginaPrincipal, Path=ViewModel.AnchoMonitorTamanoDestino, Mode=OneWay, Converter={StaticResource AnchoColumnaPx}}" />
+                                                    <ColumnDefinition Width="6" />
+                                                    <ColumnDefinition Width="{Binding ElementName=PaginaPrincipal, Path=ViewModel.AnchoMonitorCopiados, Mode=OneWay, Converter={StaticResource AnchoColumnaPx}}" />
+                                                    <ColumnDefinition Width="6" />
+                                                    <ColumnDefinition Width="{Binding ElementName=PaginaPrincipal, Path=ViewModel.AnchoMonitorErrores, Mode=OneWay, Converter={StaticResource AnchoColumnaPx}}" />
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock
                                                     Grid.Column="0"
                                                     IsTextSelectionEnabled="True"
                                                     Style="{StaticResource CeldaFila}"
-                                                    Text="{x:Bind Nombre}" />
+                                                    Text="{x:Bind Nombre}"
+                                                    ToolTipService.ToolTip="{x:Bind Nombre}" />
                                                 <Border
-                                                    Grid.Column="1"
+                                                    Grid.Column="2"
                                                     Style="{StaticResource ChipEstado}"
                                                     Background="{x:Bind Estado, Mode=OneWay, Converter={StaticResource EstadoParBrush}, ConverterParameter=Fondo}">
                                                     <TextBlock
@@ -747,8 +827,13 @@
                                                         Foreground="{x:Bind Estado, Mode=OneWay, Converter={StaticResource EstadoParBrush}, ConverterParameter=Texto}"
                                                         Text="{x:Bind Estado}" />
                                                 </Border>
-                                                <TextBlock Grid.Column="2" Style="{StaticResource CeldaFila}" Text="{x:Bind Copiados}" />
-                                                <TextBlock Grid.Column="3" Style="{StaticResource CeldaFila}" Text="{x:Bind Errores}" />
+                                                <TextBlock
+                                                    Grid.Column="4"
+                                                    Style="{StaticResource CeldaFila}"
+                                                    Text="{x:Bind TamanoDestinoTexto}"
+                                                    ToolTipService.ToolTip="{x:Bind RutaDestino}" />
+                                                <TextBlock Grid.Column="6" Style="{StaticResource CeldaFila}" Text="{x:Bind Copiados}" />
+                                                <TextBlock Grid.Column="8" Style="{StaticResource CeldaFila}" Text="{x:Bind Errores}" />
                                             </Grid>
                                         </DataTemplate>
                                     </ListView.ItemTemplate>
@@ -1016,8 +1101,13 @@
                         Text="{x:Bind ViewModel.TextoResumenRegistroFiltrado, Mode=OneWay}" />
                     <Border Grid.Row="4" Style="{StaticResource Tarjeta}" Padding="0">
                         <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
                             <StackPanel
                                 Padding="32,48"
+                                Grid.RowSpan="2"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center"
                                 Spacing="12"
@@ -1039,22 +1129,68 @@
                                     TextAlignment="Center"
                                     TextWrapping="WrapWholeWords" />
                             </StackPanel>
+                            <Grid
+                                x:Name="CabeceraRegistro"
+                                Grid.Row="0"
+                                ColumnSpacing="0"
+                                Padding="10,6"
+                                Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                Visibility="{x:Bind ViewModel.MostrarEstadoVacioRegistro, Mode=OneWay, Converter={StaticResource BoolAVis}, ConverterParameter=Invertir}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition
+                                        x:Name="ColRegistroHora"
+                                        Width="{x:Bind ViewModel.AnchoRegistroHora, Mode=OneWay, Converter={StaticResource AnchoColumnaPx}}" />
+                                    <ColumnDefinition Width="6" />
+                                    <ColumnDefinition
+                                        x:Name="ColRegistroPar"
+                                        Width="{x:Bind ViewModel.AnchoRegistroPar, Mode=OneWay, Converter={StaticResource AnchoColumnaPx}}" />
+                                    <ColumnDefinition Width="6" />
+                                    <ColumnDefinition
+                                        x:Name="ColRegistroNivel"
+                                        Width="{x:Bind ViewModel.AnchoRegistroNivel, Mode=OneWay, Converter={StaticResource AnchoColumnaPx}}" />
+                                    <ColumnDefinition Width="6" />
+                                    <ColumnDefinition
+                                        x:Name="ColRegistroMensaje"
+                                        Width="{x:Bind ViewModel.AnchoRegistroMensaje, Mode=OneWay, Converter={StaticResource AnchoColumnaPx}}" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Style="{StaticResource CabeceraColumna}" Text="Hora" />
+                                <Border
+                                    x:Name="SepRegistroHoraPar"
+                                    Grid.Column="1"
+                                    Style="{StaticResource SeparadorColumna}" />
+                                <TextBlock Grid.Column="2" Style="{StaticResource CabeceraColumna}" Text="Par" />
+                                <Border
+                                    x:Name="SepRegistroParNivel"
+                                    Grid.Column="3"
+                                    Style="{StaticResource SeparadorColumna}" />
+                                <TextBlock Grid.Column="4" Style="{StaticResource CabeceraColumna}" Text="Nivel" />
+                                <Border
+                                    x:Name="SepRegistroNivelMensaje"
+                                    Grid.Column="5"
+                                    Style="{StaticResource SeparadorColumna}" />
+                                <TextBlock Grid.Column="6" Style="{StaticResource CabeceraColumna}" Text="Mensaje" />
+                            </Grid>
                             <ListView
                                 x:Name="ListaRegistro"
+                                Grid.Row="1"
                                 ItemsSource="{x:Bind ViewModel.LineasRegistro, Mode=OneWay}"
                                 SelectionMode="None"
+                                ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                 Visibility="{x:Bind ViewModel.MostrarEstadoVacioRegistro, Mode=OneWay, Converter={StaticResource BoolAVis}, ConverterParameter=Invertir}">
                             <ListView.ItemTemplate>
                                 <DataTemplate x:DataType="models:LineaRegistroViewModel">
                                     <Grid
                                         Padding="10,4"
                                         Background="{Binding Nivel, Converter={StaticResource NivelRegistroBrush}, ConverterParameter=Fondo}"
-                                        ColumnSpacing="10">
+                                        ColumnSpacing="0">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="140" />
-                                            <ColumnDefinition Width="120" />
-                                            <ColumnDefinition Width="72" />
-                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="{Binding ElementName=PaginaPrincipal, Path=ViewModel.AnchoRegistroHora, Mode=OneWay, Converter={StaticResource AnchoColumnaPx}}" />
+                                            <ColumnDefinition Width="6" />
+                                            <ColumnDefinition Width="{Binding ElementName=PaginaPrincipal, Path=ViewModel.AnchoRegistroPar, Mode=OneWay, Converter={StaticResource AnchoColumnaPx}}" />
+                                            <ColumnDefinition Width="6" />
+                                            <ColumnDefinition Width="{Binding ElementName=PaginaPrincipal, Path=ViewModel.AnchoRegistroNivel, Mode=OneWay, Converter={StaticResource AnchoColumnaPx}}" />
+                                            <ColumnDefinition Width="6" />
+                                            <ColumnDefinition Width="{Binding ElementName=PaginaPrincipal, Path=ViewModel.AnchoRegistroMensaje, Mode=OneWay, Converter={StaticResource AnchoColumnaPx}}" />
                                         </Grid.ColumnDefinitions>
                                         <TextBlock
                                             Grid.Column="0"
@@ -1064,20 +1200,20 @@
                                             Text="{Binding Hora}"
                                             TextTrimming="CharacterEllipsis" />
                                         <TextBlock
-                                            Grid.Column="1"
+                                            Grid.Column="2"
                                             FontSize="12"
                                             Foreground="{Binding Nivel, Converter={StaticResource NivelRegistroBrush}, ConverterParameter=Mensaje}"
                                             Text="{Binding Par}"
                                             TextTrimming="CharacterEllipsis"
                                             ToolTipService.ToolTip="{Binding Par}" />
                                         <TextBlock
-                                            Grid.Column="2"
+                                            Grid.Column="4"
                                             FontSize="12"
                                             FontWeight="SemiBold"
                                             Foreground="{Binding Nivel, Converter={StaticResource NivelRegistroBrush}, ConverterParameter=Nivel}"
                                             Text="{Binding Nivel}" />
                                         <TextBlock
-                                            Grid.Column="3"
+                                            Grid.Column="6"
                                             FontSize="12"
                                             Foreground="{Binding Nivel, Converter={StaticResource NivelRegistroBrush}, ConverterParameter=Mensaje}"
                                             IsTextSelectionEnabled="True"
@@ -1691,5 +1827,148 @@
             Target="{x:Bind BotonAnalizarCambios}"
             IsOpen="{x:Bind ViewModel.ConsejoAnalizarAbierto, Mode=TwoWay}"
             CloseButtonClick="ConsejoAnalizar_Cerrado" />
+
+        <!-- Panel oculto capturado como imagen (mismo aspecto que tarjetas de Sincronización) -->
+        <Grid
+            x:Name="PanelExportacionParesActivos"
+            Visibility="Collapsed"
+            Width="760"
+            Margin="-24000,0,0,0"
+            Padding="24"
+            Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+            <StackPanel Spacing="16">
+                <StackPanel Spacing="4">
+                    <TextBlock Style="{StaticResource TituloSeccion}" Text="Pares de sincronización" />
+                    <TextBlock Style="{StaticResource SubtituloSeccion}">
+                        <Run Text="Perfil " />
+                        <Run Text="{x:Bind ViewModel.TextoExportacionPerfil, Mode=OneWay}" />
+                        <Run Text=" · " />
+                        <Run Text="{x:Bind ViewModel.TextoExportacionFecha, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock
+                        Style="{StaticResource SubtituloSeccion}"
+                        Text="Pares en estado OK mientras el demonio sincroniza." />
+                </StackPanel>
+
+                <Border Style="{StaticResource Tarjeta}" Padding="12">
+                    <ItemsRepeater ItemsSource="{x:Bind ViewModel.ParesExportacionImagen, Mode=OneWay}">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Orientation="Vertical" Spacing="12" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="models:ParExportacionImagenViewModel">
+                                <Border
+                                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="16">
+                                    <StackPanel Spacing="12">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock
+                                                FontSize="16"
+                                                FontWeight="SemiBold"
+                                                Text="{x:Bind Nombre, Mode=OneWay}" />
+                                            <Border
+                                                Style="{StaticResource ChipEstado}"
+                                                Background="{x:Bind ClaveEstadoChip, Mode=OneWay, Converter={StaticResource EstadoParBrush}, ConverterParameter=Fondo}">
+                                                <TextBlock
+                                                    FontSize="11"
+                                                    FontWeight="SemiBold"
+                                                    Foreground="{x:Bind ClaveEstadoChip, Mode=OneWay, Converter={StaticResource EstadoParBrush}, ConverterParameter=Texto}"
+                                                    Text="{x:Bind EtiquetaEstado, Mode=OneWay}" />
+                                            </Border>
+                                        </StackPanel>
+
+                                        <StackPanel Spacing="6">
+                                            <Border
+                                                Background="{StaticResource OrigenFondoBrush}"
+                                                BorderBrush="{StaticResource OrigenAcentoBrush}"
+                                                BorderThickness="0,0,0,2"
+                                                CornerRadius="4"
+                                                Padding="8,6">
+                                                <StackPanel Spacing="2">
+                                                    <TextBlock
+                                                        FontSize="11"
+                                                        FontWeight="SemiBold"
+                                                        Foreground="{StaticResource OrigenAcentoBrush}"
+                                                        Text="Origen" />
+                                                    <TextBlock
+                                                        FontSize="12"
+                                                        Text="{x:Bind RutaOrigen, Mode=OneWay}"
+                                                        TextWrapping="WrapWholeWords" />
+                                                </StackPanel>
+                                            </Border>
+                                            <FontIcon
+                                                HorizontalAlignment="Center"
+                                                FontSize="12"
+                                                Glyph="&#xE74B;"
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                            <Border
+                                                Background="{StaticResource DestinoFondoBrush}"
+                                                BorderBrush="{StaticResource DestinoAcentoBrush}"
+                                                BorderThickness="0,0,0,2"
+                                                CornerRadius="4"
+                                                Padding="8,6">
+                                                <StackPanel Spacing="2">
+                                                    <TextBlock
+                                                        FontSize="11"
+                                                        FontWeight="SemiBold"
+                                                        Foreground="{StaticResource DestinoAcentoBrush}"
+                                                        Text="Destino" />
+                                                    <TextBlock
+                                                        FontSize="12"
+                                                        Text="{x:Bind RutaDestino, Mode=OneWay}"
+                                                        TextWrapping="WrapWholeWords" />
+                                                    <TextBlock
+                                                        FontSize="11"
+                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                        Text="{x:Bind TextoTamanoDestino, Mode=OneWay}" />
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+
+                                        <Grid ColumnSpacing="16">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Spacing="2">
+                                                <TextBlock
+                                                    FontSize="11"
+                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                    Text="Copiados" />
+                                                <TextBlock
+                                                    FontWeight="SemiBold"
+                                                    Text="{x:Bind TextoCopiados, Mode=OneWay}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Spacing="2">
+                                                <TextBlock
+                                                    FontSize="11"
+                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                    Text="Errores" />
+                                                <TextBlock
+                                                    FontWeight="SemiBold"
+                                                    Text="{x:Bind TextoErrores, Mode=OneWay}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Spacing="2">
+                                                <TextBlock
+                                                    FontSize="11"
+                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                    Text="Estado" />
+                                                <TextBlock
+                                                    FontWeight="SemiBold"
+                                                    Text="{x:Bind Estado, Mode=OneWay}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </Border>
+            </StackPanel>
+        </Grid>
     </Grid>
 </Page>

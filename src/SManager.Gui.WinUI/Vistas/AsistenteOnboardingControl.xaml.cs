@@ -9,18 +9,23 @@ namespace SManager.Gui.WinUI.Vistas;
 /// <summary>Contenedor visual del asistente de primer par (Fase 2).</summary>
 public sealed partial class AsistenteOnboardingControl : UserControl
 {
-    public AsistenteOnboardingViewModel? ViewModel { get; private set; }
+    /// <summary>ViewModel compartido; DependencyProperty para que x:Bind se actualice sin Bindings.Update().</summary>
+    public static readonly DependencyProperty ViewModelProperty =
+        DependencyProperty.Register(
+            nameof(ViewModel),
+            typeof(AsistenteOnboardingViewModel),
+            typeof(AsistenteOnboardingControl),
+            new PropertyMetadata(null));
+
+    public AsistenteOnboardingViewModel? ViewModel
+    {
+        get => (AsistenteOnboardingViewModel?)GetValue(ViewModelProperty);
+        set => SetValue(ViewModelProperty, value);
+    }
 
     public AsistenteOnboardingControl()
     {
         InitializeComponent();
-    }
-
-    /// <summary>Enlaza el ViewModel creado por MainPageViewModel (una sola instancia compartida).</summary>
-    public void EnlazarViewModel(AsistenteOnboardingViewModel viewModel)
-    {
-        ViewModel = viewModel;
-        DataContext = viewModel;
     }
 
     private void Plantilla_Click(object sender, RoutedEventArgs e)
