@@ -88,6 +88,9 @@ public sealed class ResumenPar
 
     [JsonPropertyName("ultima_sincronizacion")]
     public string? UltimaSincronizacion { get; set; }
+
+    [JsonPropertyName("proximo_polling_en_segundos")]
+    public int? ProximoPollingEnSegundos { get; set; }
 }
 
 public sealed class EntradaActividad

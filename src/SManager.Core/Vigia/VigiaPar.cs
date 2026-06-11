@@ -93,17 +93,17 @@ public sealed class VigiaPar : IAsyncDisposable
                     var solicitaEscaneo = _estado.PeticionEscaneoCompleto.TryGetValue(_idPar, out var scan) && scan;
                     if (rafaga >= UmbralRafaga || solicitaEscaneo)
                     {
-                        if (solicitaEscaneo)
-                        {
-                            _estado.EncolarLog(_idPar, "INFO", "Polling de seguridad: escaneo diferencial");
-                            _estado.PeticionEscaneoCompleto[_idPar] = false;
-                        }
-                        else if (rafaga >= UmbralRafaga)
-                        {
-                            _estado.EncolarLog(_idPar, "INFO", $"Ráfaga FSW ({rafaga} eventos): escaneo de rescate");
-                        }
+                        var esPolling = solicitaEscaneo
+                            && _estado.PeticionEscaneoPorPolling.TryGetValue(_idPar, out var porPolling)
+                            && porPolling;
 
-                        await EscaneoCompletoAsync(par, cancelacion).ConfigureAwait(false);
+                        await EjecutarEscaneoCompletoConColaAsync(
+                                par,
+                                cancelacion,
+                                esPolling: esPolling,
+                                esRafaga: rafaga >= UmbralRafaga,
+                                eventosRafaga: rafaga)
+                            .ConfigureAwait(false);
                         ProcesarPendientesEstables(par, segEstab);
                     }
                     else
@@ -431,6 +431,65 @@ public sealed class VigiaPar : IAsyncDisposable
             {
                 _pendientes.Remove(k);
             }
+        }
+    }
+
+    /// <summary>
+    /// Ejecuta escaneo completo y, si llegaron pollings durante la ejecución,
+    /// lanza como mucho un barrido adicional encolado (coalescencia).
+    /// </summary>
+    private async Task EjecutarEscaneoCompletoConColaAsync(
+        ParSincronizacion par,
+        CancellationToken cancelacion,
+        bool esPolling,
+        bool esRafaga,
+        int eventosRafaga)
+    {
+        var esPrimeraPasada = true;
+
+        while (true)
+        {
+            if (esPrimeraPasada)
+            {
+                if (esPolling)
+                {
+                    _estado.EncolarLog(_idPar, "INFO", "Polling de seguridad: escaneo diferencial");
+                    _estado.PeticionEscaneoCompleto[_idPar] = false;
+                    _estado.PeticionEscaneoPorPolling.TryRemove(_idPar, out _);
+                }
+                else if (_estado.PeticionEscaneoCompleto.TryGetValue(_idPar, out var scan) && scan)
+                {
+                    _estado.EncolarLog(_idPar, "INFO", "Escaneo completo solicitado");
+                    _estado.PeticionEscaneoCompleto[_idPar] = false;
+                }
+                else if (esRafaga)
+                {
+                    _estado.EncolarLog(_idPar, "INFO", $"Ráfaga FSW ({eventosRafaga} eventos): escaneo de rescate");
+                }
+            }
+            else
+            {
+                _estado.EncolarLog(_idPar, "INFO", "Polling encolado: ejecutando escaneo pendiente");
+            }
+
+            _estado.EscaneoEnCursoPorPar[_idPar] = true;
+            try
+            {
+                await EscaneoCompletoAsync(par, cancelacion).ConfigureAwait(false);
+            }
+            finally
+            {
+                _estado.EscaneoEnCursoPorPar[_idPar] = false;
+            }
+
+            if (!_estado.EscaneoPollingPendientePorPar.TryRemove(_idPar, out var pendiente) || !pendiente)
+            {
+                break;
+            }
+
+            esPrimeraPasada = false;
+            esPolling = true;
+            esRafaga = false;
         }
     }
 

@@ -100,6 +100,20 @@
                 <ToggleSwitch x:Name="InterruptorActivo" Header="Activo" OnContent="Sí" OffContent="No" />
                 <ToggleSwitch x:Name="InterruptorPausa" Header="Pausado" OnContent="Sí" OffContent="No" />
             </StackPanel>
+
+            <NumberBox
+                x:Name="CajaPollingPar"
+                Header="Barrido de seguridad (segundos)"
+                Minimum="0"
+                Maximum="3600"
+                SpinButtonPlacementMode="Inline"
+                SmallChange="30"
+                LargeChange="60"
+                ToolTipService.ToolTip="0 = usar el intervalo global de Ajustes. Mínimo efectivo: 30 s." />
+            <TextBlock
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="Red de seguridad si el vigilante de archivos pierde eventos. Los cambios normales los detecta el FileSystemWatcher en segundos."
+                TextWrapping="WrapWholeWords" />
         </StackPanel>
     </ScrollViewer>
 </UserControl>

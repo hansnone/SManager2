@@ -61,4 +61,11 @@ public sealed class ParSincronizacion
 
     [JsonPropertyName("total_errores")]
     public int TotalErrores { get; set; }
+
+    /// <summary>
+    /// Segundos entre barridos de seguridad de este par.
+    /// Null o &lt;= 0: usar <see cref="ConfiguracionAplicacion.IntervaloPollingSegundos"/> global.
+    /// </summary>
+    [JsonPropertyName("intervalo_polling_segundos")]
+    public int? IntervaloPollingSegundos { get; set; }
 }

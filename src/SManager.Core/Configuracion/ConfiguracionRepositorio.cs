@@ -1,5 +1,6 @@
 using System.Text.Json;
 using SManager.Core.Modelos;
+using SManager.Core.Motor;
 
 namespace SManager.Core.Configuracion;
 
@@ -60,6 +61,8 @@ public sealed class ConfiguracionRepositorio
             {
                 par.IdPar = Guid.NewGuid().ToString();
             }
+
+            par.IntervaloPollingSegundos = PoliticaPolling.NormalizarIntervaloPar(par.IntervaloPollingSegundos);
         }
     }
 }

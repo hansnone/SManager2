@@ -204,7 +204,7 @@ public static class ContenidoGuiaApp
                 + "• Minimizar a la bandeja al cerrar: la X oculta la ventana; el demonio sigue activo.\n"
                 + "• Notificaciones: avisos al iniciar/detener y si acumulas errores.\n\n"
                 + "Vigilancia:\n"
-                + "• Polling de seguridad (s): barrido periódico por si se perdió un evento del sistema.\n"
+                + "• Polling de seguridad (s): barrido periódico global; cada par puede tener su propio intervalo en Editar par (0 = global).\n"
                 + "• Estabilidad del archivo (s): espera antes de copiar para archivos aún en escritura.\n\n"
                 + "Rendimiento:\n"
                 + "• Copiadores / Hidratadores en paralelo: hilos de copia e hidratación (OneDrive, etc.).\n"

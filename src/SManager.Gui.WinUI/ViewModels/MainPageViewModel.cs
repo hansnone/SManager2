@@ -1289,6 +1289,7 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         destino.FiltroExclusion = origen.FiltroExclusion;
         destino.Habilitado = origen.Habilitado;
         destino.Pausado = origen.Pausado;
+        destino.IntervaloPollingSegundos = origen.IntervaloPollingSegundos;
     }
 
     [RelayCommand]
@@ -1697,6 +1698,7 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
                 RutaDestino = par.RutaDestino,
                 FiltroInclusion = par.FiltroInclusion,
                 FiltroExclusion = par.FiltroExclusion,
+                IntervaloPollingSegundos = par.IntervaloPollingSegundos,
                 TotalCopiados = par.TotalCopiados,
                 TotalErrores = par.TotalErrores
             });
@@ -2005,6 +2007,7 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
             RutaDestino = fila.RutaDestino,
             FiltroInclusion = fila.FiltroInclusion,
             FiltroExclusion = fila.FiltroExclusion,
+            IntervaloPollingSegundos = fila.IntervaloPollingSegundos,
             TotalCopiados = fila.TotalCopiados,
             TotalErrores = fila.TotalErrores
         }).ToList();
@@ -2139,7 +2142,7 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
             if (estado is not null)
             {
                 TextoPolling = estado.ProximoPollingEnSegundos.HasValue
-                    ? $"Próximo barrido de seguridad: en {estado.ProximoPollingEnSegundos}s"
+                    ? $"Próximo barrido (par más próximo): en {estado.ProximoPollingEnSegundos}s"
                     : "Próximo barrido de seguridad: —";
 
                 ServicioSincronizacionLista.SincronizarInPlace(

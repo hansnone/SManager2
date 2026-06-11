@@ -67,9 +67,10 @@ public sealed class MotorSincronizacion : IAsyncDisposable
             Config = config,
             Pares = config.Pares.ToList(),
             EnEjecucion = true,
-            InicioSesionUtc = DateTime.UtcNow,
-            ProximoPollingUtc = DateTime.UtcNow.AddSeconds(config.IntervaloPollingSegundos)
+            InicioSesionUtc = DateTime.UtcNow
         };
+
+        InicializarTemporizadoresPolling(config);
 
         InicializarResumenPares();
         _estado.EncolarLog("__ALL__", "INFO", $"SManager 2.0 iniciado (perfil: {_opciones.NombrePerfil}, PID: {Environment.ProcessId})");
@@ -302,21 +303,74 @@ public sealed class MotorSincronizacion : IAsyncDisposable
 
     private void ProcesarPollingSeguridad()
     {
-        if (_estado?.ProximoPollingUtc is null || DateTime.UtcNow < _estado.ProximoPollingUtc)
+        if (_estado is null)
         {
             return;
         }
 
+        List<ParSincronizacion> candidatos;
         lock (_estado.CandadoPares)
         {
-            foreach (var par in _estado.Pares.Where(p => p.Habilitado && !p.Pausado))
+            candidatos = _estado.Pares
+                .Where(p => p.Habilitado && !p.Pausado)
+                .ToList();
+        }
+
+        var ahora = DateTime.UtcNow;
+        foreach (var par in candidatos)
+        {
+            if (!_estado.ProximoPollingPorParUtc.TryGetValue(par.IdPar, out var proximo) || ahora < proximo)
             {
-                _estado.PeticionEscaneoCompleto[par.IdPar] = true;
+                continue;
+            }
+
+            _estado.ProgramarProximoPolling(par);
+            _estado.SolicitarEscaneoPorPolling(par.IdPar);
+        }
+    }
+
+    private void InicializarTemporizadoresPolling(ConfiguracionAplicacion config)
+    {
+        if (_estado is null)
+        {
+            return;
+        }
+
+        _estado.ProximoPollingPorParUtc.Clear();
+        foreach (var par in config.Pares.Where(p => p.Habilitado && !p.Pausado))
+        {
+            _estado.ProgramarProximoPolling(par);
+        }
+    }
+
+    private void SincronizarTemporizadoresPollingTrasRecarga()
+    {
+        if (_estado is null)
+        {
+            return;
+        }
+
+        var idsActivos = _estado.Pares
+            .Where(p => p.Habilitado && !p.Pausado)
+            .Select(p => p.IdPar)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var id in _estado.ProximoPollingPorParUtc.Keys.ToList())
+        {
+            if (!idsActivos.Contains(id))
+            {
+                _estado.ProximoPollingPorParUtc.TryRemove(id, out _);
+                _estado.EscaneoPollingPendientePorPar.TryRemove(id, out _);
             }
         }
 
-        _estado.EncolarLog("__ALL__", "INFO", "Polling de seguridad programado");
-        _estado.ProximoPollingUtc = DateTime.UtcNow.AddSeconds(_estado.Config.IntervaloPollingSegundos);
+        foreach (var par in _estado.Pares.Where(p => p.Habilitado && !p.Pausado))
+        {
+            if (!_estado.ProximoPollingPorParUtc.ContainsKey(par.IdPar))
+            {
+                _estado.ProgramarProximoPolling(par);
+            }
+        }
     }
 
     private void ProcesarEstadisticas()
@@ -417,6 +471,8 @@ public sealed class MotorSincronizacion : IAsyncDisposable
 
             _ultimaMarcaConfig = File.GetLastWriteTimeUtc(_opciones.RutaConfiguracion);
 
+            SincronizarTemporizadoresPollingTrasRecarga();
+
             // Mantener copia espejo que usa el demonio al arrancar.
             var rutaActiva = RutasDatos.ObtenerRutaConfiguracionActiva(_opciones.NombrePerfil);
             await CopiaArchivoConReintentos
@@ -474,9 +530,7 @@ public sealed class MotorSincronizacion : IAsyncDisposable
     private EstadoPerfil ConstruirEstadoIpc()
     {
         var estado = _estado!;
-        var segundosPolling = estado.ProximoPollingUtc.HasValue
-            ? (int)Math.Max(0, (estado.ProximoPollingUtc.Value - DateTime.UtcNow).TotalSeconds)
-            : (int?)null;
+        var segundosPolling = estado.SegundosHastaProximoPollingGlobal();
 
         List<EntradaActividad> actividad;
         lock (estado.CandadoHistorial)
@@ -503,7 +557,8 @@ public sealed class MotorSincronizacion : IAsyncDisposable
             Estado = r.Estado,
             Copiados = r.Copiados,
             Errores = r.Errores,
-            UltimaSincronizacion = r.UltimaSincronizacion
+            UltimaSincronizacion = r.UltimaSincronizacion,
+            ProximoPollingEnSegundos = estado.SegundosHastaProximoPolling(r.IdPar)
         }).ToList();
 
         var (memoriaBytes, cpuPorcentaje) = _muestreadorRecursos.Muestrear();

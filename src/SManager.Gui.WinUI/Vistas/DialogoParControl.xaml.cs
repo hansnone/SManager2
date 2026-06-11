@@ -57,6 +57,7 @@ public sealed partial class DialogoParControl : UserControl
 
             InterruptorActivo.IsOn = true;
             InterruptorPausa.IsOn = false;
+            CajaPollingPar.Value = 0;
             TextoResultadoPruebaFiltros.Text = string.Empty;
             return;
         }
@@ -73,6 +74,7 @@ public sealed partial class DialogoParControl : UserControl
 
         InterruptorActivo.IsOn = par.Habilitado;
         InterruptorPausa.IsOn = par.Pausado;
+        CajaPollingPar.Value = par.IntervaloPollingSegundos ?? 0;
         TextoResultadoPruebaFiltros.Text = string.Empty;
     }
 
@@ -87,7 +89,8 @@ public sealed partial class DialogoParControl : UserControl
             FiltroInclusion = string.IsNullOrWhiteSpace(CajaInclusion.Text) ? "*" : CajaInclusion.Text.Trim(),
             FiltroExclusion = ServicioReglasFiltroVisual.HaciaCadenaExclusion(_reglasExclusion),
             Habilitado = InterruptorActivo.IsOn,
-            Pausado = InterruptorPausa.IsOn
+            Pausado = InterruptorPausa.IsOn,
+            IntervaloPollingSegundos = CajaPollingPar.Value <= 0 ? null : (int)CajaPollingPar.Value
         };
 
     private async void BotonOrigen_Click(object sender, RoutedEventArgs e)

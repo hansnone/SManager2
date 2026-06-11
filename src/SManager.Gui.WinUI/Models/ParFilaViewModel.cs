@@ -31,6 +31,13 @@ public partial class ParFilaViewModel : ObservableObject
     [ObservableProperty]
     private string _filtroExclusion = "~$*;*.tmp;*.partial;*.lnk";
 
+    /// <summary>
+    /// Segundos entre barridos de seguridad de este par.
+    /// Null = heredar el valor global de Ajustes.
+    /// </summary>
+    [ObservableProperty]
+    private int? _intervaloPollingSegundos;
+
     [ObservableProperty]
     private bool _expandido;
 
@@ -123,7 +130,8 @@ public partial class ParFilaViewModel : ObservableObject
         RutaOrigen = RutaOrigen,
         RutaDestino = RutaDestino,
         FiltroInclusion = FiltroInclusion,
-        FiltroExclusion = FiltroExclusion
+        FiltroExclusion = FiltroExclusion,
+        IntervaloPollingSegundos = IntervaloPollingSegundos
     };
 
     private void NotificarResumen()

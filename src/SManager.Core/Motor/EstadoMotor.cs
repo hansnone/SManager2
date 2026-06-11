@@ -35,10 +35,24 @@ public sealed class EstadoMotor
     public ConcurrentDictionary<string, bool> PeticionEscaneoCompleto { get; } =
         new(StringComparer.OrdinalIgnoreCase);
 
-    public ConcurrentDictionary<string, bool> ParadasVigiaPorId { get; } =
+    /// <summary>True si la petición de escaneo proviene del temporizador de polling (no arranque/recarga).</summary>
+    public ConcurrentDictionary<string, bool> PeticionEscaneoPorPolling { get; } =
         new(StringComparer.OrdinalIgnoreCase);
 
-    public DateTime? ProximoPollingUtc { get; set; }
+    /// <summary>True mientras el vigía ejecuta un escaneo completo del par.</summary>
+    public ConcurrentDictionary<string, bool> EscaneoEnCursoPorPar { get; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Polling diferido: un barrido llegó mientras el escaneo anterior seguía activo.</summary>
+    public ConcurrentDictionary<string, bool> EscaneoPollingPendientePorPar { get; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Próximo barrido de seguridad programado por par (UTC).</summary>
+    public ConcurrentDictionary<string, DateTime> ProximoPollingPorParUtc { get; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    public ConcurrentDictionary<string, bool> ParadasVigiaPorId { get; } =
+        new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Momento UTC en que arrancó esta sesión del demonio.</summary>
     public DateTime InicioSesionUtc { get; set; }
@@ -46,6 +60,58 @@ public sealed class EstadoMotor
     public MetricasMotor Metricas { get; } = new();
 
     public readonly object CandadoPares = new();
+
+    /// <summary>Programa el temporizador de polling de un par desde ahora.</summary>
+    public void ProgramarProximoPolling(ParSincronizacion par)
+    {
+        var segundos = PoliticaPolling.ResolverIntervaloSegundos(par, Config);
+        ProximoPollingPorParUtc[par.IdPar] = DateTime.UtcNow.AddSeconds(segundos);
+    }
+
+    /// <summary>
+    /// Solicita escaneo por polling: inmediato si no hay escaneo en curso;
+    /// si no, encola un único barrido pendiente (coalescencia).
+    /// </summary>
+    public void SolicitarEscaneoPorPolling(string idPar)
+    {
+        if (EscaneoEnCursoPorPar.TryGetValue(idPar, out var enCurso) && enCurso)
+        {
+            EscaneoPollingPendientePorPar[idPar] = true;
+            EncolarLog(idPar, "INFO", "Polling de seguridad encolado (escaneo en curso)");
+            return;
+        }
+
+        PeticionEscaneoCompleto[idPar] = true;
+        PeticionEscaneoPorPolling[idPar] = true;
+    }
+
+    /// <summary>Segundos hasta el próximo polling entre todos los pares activos (mínimo).</summary>
+    public int? SegundosHastaProximoPollingGlobal()
+    {
+        if (ProximoPollingPorParUtc.IsEmpty)
+        {
+            return null;
+        }
+
+        var ahora = DateTime.UtcNow;
+        var minimo = ProximoPollingPorParUtc.Values
+            .Select(proximo => (int)Math.Max(0, (proximo - ahora).TotalSeconds))
+            .DefaultIfEmpty(0)
+            .Min();
+
+        return minimo;
+    }
+
+    /// <summary>Segundos hasta el próximo polling de un par concreto.</summary>
+    public int? SegundosHastaProximoPolling(string idPar)
+    {
+        if (!ProximoPollingPorParUtc.TryGetValue(idPar, out var proximo))
+        {
+            return null;
+        }
+
+        return (int)Math.Max(0, (proximo - DateTime.UtcNow).TotalSeconds);
+    }
 
     public void EncolarLog(string idPar, string nivel, string mensaje)
     {
