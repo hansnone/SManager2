@@ -96,6 +96,22 @@
                 </StackPanel>
             </Expander>
 
+            <ComboBox
+                x:Name="DesplegableModo"
+                Header="Modo de sincronización"
+                HorizontalAlignment="Stretch"
+                SelectedIndex="0"
+                SelectionChanged="DesplegableModo_SelectionChanged">
+                <ComboBoxItem Content="Acumulativo sin borrado (Principal / Predeterminado)" Tag="0" />
+                <ComboBoxItem Content="Acumulativo con borrado en origen (Requiere Admin Local)" Tag="1" />
+                <ComboBoxItem Content="Espejo — Mirror (Sincronización total idéntica A -> B)" Tag="2" />
+            </ComboBox>
+            <TextBlock
+                x:Name="TextoExplicacionModo"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="Guarda todos los archivos de A en B. No borra nada en B ni en A aunque se eliminen archivos en el Origen."
+                TextWrapping="WrapWholeWords" />
+
             <StackPanel Orientation="Horizontal" Spacing="24">
                 <ToggleSwitch x:Name="InterruptorActivo" Header="Activo" OnContent="Sí" OffContent="No" />
                 <ToggleSwitch x:Name="InterruptorPausa" Header="Pausado" OnContent="Sí" OffContent="No" />

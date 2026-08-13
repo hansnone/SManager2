@@ -57,6 +57,8 @@ public sealed partial class DialogoParControl : UserControl
 
             InterruptorActivo.IsOn = true;
             InterruptorPausa.IsOn = false;
+            DesplegableModo.SelectedIndex = 0;
+            ActualizarTextoExplicacionModo();
             CajaPollingPar.Value = 0;
             TextoResultadoPruebaFiltros.Text = string.Empty;
             return;
@@ -74,6 +76,8 @@ public sealed partial class DialogoParControl : UserControl
 
         InterruptorActivo.IsOn = par.Habilitado;
         InterruptorPausa.IsOn = par.Pausado;
+        DesplegableModo.SelectedIndex = (int)par.Modo;
+        ActualizarTextoExplicacionModo();
         CajaPollingPar.Value = par.IntervaloPollingSegundos ?? 0;
         TextoResultadoPruebaFiltros.Text = string.Empty;
     }
@@ -90,8 +94,30 @@ public sealed partial class DialogoParControl : UserControl
             FiltroExclusion = ServicioReglasFiltroVisual.HaciaCadenaExclusion(_reglasExclusion),
             Habilitado = InterruptorActivo.IsOn,
             Pausado = InterruptorPausa.IsOn,
+            Modo = (ModoSincronizacion)Math.Clamp(DesplegableModo.SelectedIndex, 0, 2),
+            BorrarEnOrigen = DesplegableModo.SelectedIndex == 1,
             IntervaloPollingSegundos = CajaPollingPar.Value <= 0 ? null : (int)CajaPollingPar.Value
         };
+
+    private void DesplegableModo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        ActualizarTextoExplicacionModo();
+    }
+
+    private void ActualizarTextoExplicacionModo()
+    {
+        if (TextoExplicacionModo is null)
+        {
+            return;
+        }
+
+        TextoExplicacionModo.Text = DesplegableModo.SelectedIndex switch
+        {
+            1 => "Acumulativo con borrado en origen: Copia de A a B y elimina en A tras confirmarse en B. Requiere desbloqueo consciente con credenciales de Administrador Local.",
+            2 => "Espejo (Mirror): Sincronización idéntica 1:1. Replica altas/cambios de A en B y elimina en B cualquier archivo o carpeta borrado en A.",
+            _ => "Acumulativo sin borrado (Principal / Por defecto): Copia todos los archivos de A a B. No borra nada en B ni en A aunque desaparezcan de Origen."
+        };
+    }
 
     private async void BotonOrigen_Click(object sender, RoutedEventArgs e)
     {

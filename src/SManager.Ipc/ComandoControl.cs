@@ -4,5 +4,9 @@ namespace SManager.Ipc;
 public enum ComandoControl
 {
     Apagar,
-    Recargar
+    Recargar,
+    IniciarPares,
+    PausarPares,
+    DesbloquearBorrado,
+    AutorizarPurgaEspejo
 }

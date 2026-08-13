@@ -233,23 +233,73 @@ public sealed class MotorSincronizacion : IAsyncDisposable
             return true;
         }
 
-        // Prioridad: atender APAGAR/RECARGAR antes de trabajo pesado del ciclo.
-        var comando = await _ipc.LeerComandoPendienteAsync(_opciones.NombrePerfil, cancelacion)
+        // Prioridad: atender comandos IPC (APAGAR/RECARGAR/PARES/BORRADO) antes de trabajo pesado del ciclo.
+        var control = await _ipc.LeerControlPendienteAsync(_opciones.NombrePerfil, cancelacion)
             .ConfigureAwait(false);
 
-        if (comando == ComandoControl.Apagar)
+        if (control is not null && !string.IsNullOrWhiteSpace(control.Comando))
         {
-            await _ipc.LimpiarComandoAsync(_opciones.NombrePerfil, cancelacion).ConfigureAwait(false);
-            _logger.LogInformation("Señal APAGAR recibida para perfil {Perfil}", _opciones.NombrePerfil);
-            SolicitarApagadoInmediato();
-            return false;
-        }
-
-        if (comando == ComandoControl.Recargar)
-        {
-            await _ipc.LimpiarComandoAsync(_opciones.NombrePerfil, cancelacion).ConfigureAwait(false);
-            _recargaPendienteDesde = DateTime.UtcNow.AddSeconds(-10);
-            await ProcesarRecargaPendienteAsync(cancelacion).ConfigureAwait(false);
+            var cmd = control.Comando.ToUpperInvariant();
+            if (cmd == "APAGAR")
+            {
+                await _ipc.LimpiarComandoAsync(_opciones.NombrePerfil, cancelacion).ConfigureAwait(false);
+                _logger.LogInformation("Señal APAGAR recibida para perfil {Perfil}", _opciones.NombrePerfil);
+                SolicitarApagadoInmediato();
+                return false;
+            }
+            else if (cmd == "RECARGAR")
+            {
+                await _ipc.LimpiarComandoAsync(_opciones.NombrePerfil, cancelacion).ConfigureAwait(false);
+                _recargaPendienteDesde = DateTime.UtcNow.AddSeconds(-10);
+                await ProcesarRecargaPendienteAsync(cancelacion).ConfigureAwait(false);
+            }
+            else if (cmd == "DESBLOQUEAR_BORRADO")
+            {
+                await _ipc.LimpiarComandoAsync(_opciones.NombrePerfil, cancelacion).ConfigureAwait(false);
+                var estadoDeseado = control.DesbloquearBorrado ?? true;
+                _estado.SesionBorradoDesbloqueada = estadoDeseado;
+                _estado.EncolarLog("__ALL__", "INFO", $"[SEGURIDAD] Estado de borrado en origen en la sesión: {(estadoDeseado ? "DESBLOQUEADO (Admin)" : "BLOQUEADO")}");
+            }
+            else if (cmd == "INICIAR_PARES" && control.IdsPares is { Count: > 0 })
+            {
+                await _ipc.LimpiarComandoAsync(_opciones.NombrePerfil, cancelacion).ConfigureAwait(false);
+                lock (_estado.CandadoPares)
+                {
+                    foreach (var par in _estado.Pares.Where(p => control.IdsPares.Contains(p.IdPar, StringComparer.OrdinalIgnoreCase)))
+                    {
+                        par.Habilitado = true;
+                        par.Pausado = false;
+                        _estado.ProgramarProximoPolling(par);
+                        _estado.SolicitarEscaneoPorPolling(par.IdPar);
+                        _estado.EncolarLog(par.IdPar, "INFO", $"Par '{par.Nombre}' arrancado/reanudado por demanda.");
+                    }
+                }
+            }
+            else if (cmd == "AUTORIZAR_PURGA_ESPEJO" && control.IdsPares is { Count: > 0 })
+            {
+                await _ipc.LimpiarComandoAsync(_opciones.NombrePerfil, cancelacion).ConfigureAwait(false);
+                lock (_estado.CandadoPares)
+                {
+                    foreach (var par in _estado.Pares.Where(p => control.IdsPares.Contains(p.IdPar, StringComparer.OrdinalIgnoreCase)))
+                    {
+                        _estado.AutorizacionPurgaMasivaUnaVez[par.IdPar] = true;
+                        _estado.PeticionEscaneoCompleto[par.IdPar] = true;
+                        _estado.EncolarLog(par.IdPar, "INFO", $"[ESPEJO] Purga masiva autorizada conscientemente para el par '{par.Nombre}'.");
+                    }
+                }
+            }
+            else if (cmd == "PAUSAR_PARES" && control.IdsPares is { Count: > 0 })
+            {
+                await _ipc.LimpiarComandoAsync(_opciones.NombrePerfil, cancelacion).ConfigureAwait(false);
+                lock (_estado.CandadoPares)
+                {
+                    foreach (var par in _estado.Pares.Where(p => control.IdsPares.Contains(p.IdPar, StringComparer.OrdinalIgnoreCase)))
+                    {
+                        par.Pausado = true;
+                        _estado.EncolarLog(par.IdPar, "INFO", $"Par '{par.Nombre}' pausado.");
+                    }
+                }
+            }
         }
 
         DrenarLineasLogAlDisco();
@@ -550,15 +600,21 @@ public sealed class MotorSincronizacion : IAsyncDisposable
             .Select(CrearCopiaEnCursoIpc)
             .ToList();
 
-        var pares = _resumenPares.Values.Select(r => new ResumenPar
+        var pares = _resumenPares.Values.Select(r =>
         {
-            IdPar = r.IdPar,
-            Nombre = r.Nombre,
-            Estado = r.Estado,
-            Copiados = r.Copiados,
-            Errores = r.Errores,
-            UltimaSincronizacion = r.UltimaSincronizacion,
-            ProximoPollingEnSegundos = estado.SegundosHastaProximoPolling(r.IdPar)
+            var tieneBloqueo = estado.PurgasMasivasBloqueadas.TryGetValue(r.IdPar, out var conteo);
+            return new ResumenPar
+            {
+                IdPar = r.IdPar,
+                Nombre = r.Nombre,
+                Estado = r.Estado,
+                Copiados = r.Copiados,
+                Errores = r.Errores,
+                UltimaSincronizacion = r.UltimaSincronizacion,
+                ProximoPollingEnSegundos = estado.SegundosHastaProximoPolling(r.IdPar),
+                PurgaMasivaBloqueada = tieneBloqueo,
+                ArchivosPurgaBloqueados = tieneBloqueo ? conteo : 0
+            };
         }).ToList();
 
         var (memoriaBytes, cpuPorcentaje) = _muestreadorRecursos.Muestrear();

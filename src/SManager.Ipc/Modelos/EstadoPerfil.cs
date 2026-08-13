@@ -91,6 +91,12 @@ public sealed class ResumenPar
 
     [JsonPropertyName("proximo_polling_en_segundos")]
     public int? ProximoPollingEnSegundos { get; set; }
+
+    [JsonPropertyName("purga_masiva_bloqueada")]
+    public bool PurgaMasivaBloqueada { get; set; }
+
+    [JsonPropertyName("archivos_purga_bloqueados")]
+    public int ArchivosPurgaBloqueados { get; set; }
 }
 
 public sealed class EntradaActividad

@@ -14,6 +14,11 @@ public sealed class EstadoMotor
     public volatile bool SolicitudParadaCopiadores;
     public volatile bool SolicitudParadaHidratadores;
     public volatile bool EnEjecucion;
+    /// <summary>
+    /// Indica si el usuario se ha autenticado conscientemente como administrador local de Windows en esta sesión.
+    /// Inicia siempre en false tras cada arranque de la aplicación.
+    /// </summary>
+    public volatile bool SesionBorradoDesbloqueada;
 
     public ColaTrabajosCopia ColaCopia { get; } = new();
     public ColaTrabajosHidratacion ColaHidratacion { get; } = new();
@@ -37,6 +42,14 @@ public sealed class EstadoMotor
 
     /// <summary>True si la petición de escaneo proviene del temporizador de polling (no arranque/recarga).</summary>
     public ConcurrentDictionary<string, bool> PeticionEscaneoPorPolling { get; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Pares con purga masiva en Modo Espejo pausada por seguridad -> Conteo de archivos pendientes de purga.</summary>
+    public ConcurrentDictionary<string, int> PurgasMasivasBloqueadas { get; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Autorizaciones conscientes del usuario para purga masiva intencionada de una única pasada.</summary>
+    public ConcurrentDictionary<string, bool> AutorizacionPurgaMasivaUnaVez { get; } =
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>True mientras el vigía ejecuta un escaneo completo del par.</summary>

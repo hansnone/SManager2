@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using SManager.Core.Modelos;
+using SManager.Core.Utilidades;
 using SManager.Gui.Shared;
 using SManager.Gui.WinUI.Models;
 using SManager.Gui.Shared.Modelos;
@@ -220,6 +221,9 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _demonioEnEjecucion;
+
+    [ObservableProperty]
+    private bool _sesionBorradoDesbloqueada;
 
     [ObservableProperty]
     private ParFilaViewModel? _parSeleccionado;
@@ -1190,6 +1194,123 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
         await RefrescarEstadoDemonioEnUiAsync();
     }
 
+    [RelayCommand]
+    private async Task DesbloquearBorradoAdminAsync()
+    {
+        var exito = ServicioAutenticacionAdmin.SolicitarYValidarCredencialesAdminNativas(
+            App.WindowHandle,
+            out var mensaje);
+
+        if (exito)
+        {
+            SesionBorradoDesbloqueada = true;
+            if (DemonioEnEjecucion)
+            {
+                await _ipc.EnviarComandoAsync(
+                    PerfilActual(),
+                    ComandoControl.DesbloquearBorrado,
+                    desbloquearBorrado: true);
+            }
+
+            await MostrarAvisoAsync(
+                mensaje ?? "Autenticación correcta como administrador local. Borrado en origen activado para esta sesión.",
+                "Autenticación Confirmada");
+        }
+        else
+        {
+            SesionBorradoDesbloqueada = false;
+            await MostrarAvisoAsync(
+                mensaje ?? "Se requieren credenciales de administrador local válidas para desbloquear el borrado en origen.",
+                "Acceso Denegado");
+        }
+    }
+
+    [RelayCommand]
+    private async Task AutorizarPurgaMasivaAsync(ParFilaViewModel? par)
+    {
+        if (par is null)
+        {
+            return;
+        }
+
+        var perfil = PerfilActual();
+        await _ipc.EnviarComandoAsync(
+            perfil,
+            ComandoControl.AutorizarPurgaEspejo,
+            idsPares: [par.IdPar]);
+
+        par.TienePurgaMasivaBloqueada = false;
+        par.CantidadArchivosPurgaBloqueada = 0;
+
+        await MostrarAvisoAsync(
+            $"Purga masiva autorizada intencionadamente para el par '{par.Nombre}'. El demonio ejecutará la eliminación de los archivos huérfanos en destino.",
+            "Purga Masiva Autorizada");
+    }
+
+    [RelayCommand]
+    private async Task ArrancarSeleccionadosAsync()
+    {
+        var seleccionados = Pares.Where(p => p.Seleccionado).ToList();
+        if (seleccionados.Count == 0)
+        {
+            await MostrarAvisoAsync("Selecciona al menos un par utilizando las casillas de verificación.", "Ningún par seleccionado");
+            return;
+        }
+
+        foreach (var par in seleccionados)
+        {
+            par.Habilitado = true;
+            par.Pausado = false;
+        }
+
+        GuardarSilencioso();
+
+        if (DemonioEnEjecucion)
+        {
+            var ids = seleccionados.Select(p => p.IdPar).ToList();
+            await _ipc.EnviarComandoAsync(PerfilActual(), ComandoControl.IniciarPares, idsPares: ids);
+            await MostrarAvisoAsync($"Arrancados {ids.Count} pares seleccionados en el demonio activo.", "Pares Arrancados");
+        }
+        else
+        {
+            await IniciarAsync();
+        }
+    }
+
+    [RelayCommand]
+    private async Task PausarSeleccionadosAsync()
+    {
+        var seleccionados = Pares.Where(p => p.Seleccionado).ToList();
+        if (seleccionados.Count == 0)
+        {
+            await MostrarAvisoAsync("Selecciona al menos un par utilizando las casillas de verificación.", "Ningún par seleccionado");
+            return;
+        }
+
+        foreach (var par in seleccionados)
+        {
+            par.Pausado = true;
+        }
+
+        GuardarSilencioso();
+
+        if (DemonioEnEjecucion)
+        {
+            var ids = seleccionados.Select(p => p.IdPar).ToList();
+            await _ipc.EnviarComandoAsync(PerfilActual(), ComandoControl.PausarPares, idsPares: ids);
+        }
+    }
+
+    [RelayCommand]
+    private void SeleccionarTodosPares()
+    {
+        var todosSeleccionados = Pares.Count > 0 && Pares.All(p => p.Seleccionado);
+        foreach (var p in Pares)
+        {
+            p.Seleccionado = !todosSeleccionados;
+        }
+    }
+
     [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task RecargarAsync()
     {
@@ -2144,6 +2265,16 @@ public partial class MainPageViewModel : ObservableObject, IDisposable
                 TextoPolling = estado.ProximoPollingEnSegundos.HasValue
                     ? $"Próximo barrido (par más próximo): en {estado.ProximoPollingEnSegundos}s"
                     : "Próximo barrido de seguridad: —";
+
+                foreach (var parResumen in estado.Pares)
+                {
+                    var parViewModel = BuscarParConfiguracion(parResumen.IdPar, parResumen.Nombre);
+                    if (parViewModel is not null)
+                    {
+                        parViewModel.TienePurgaMasivaBloqueada = parResumen.PurgaMasivaBloqueada;
+                        parViewModel.CantidadArchivosPurgaBloqueada = parResumen.ArchivosPurgaBloqueados;
+                    }
+                }
 
                 ServicioSincronizacionLista.SincronizarInPlace(
                     MonitorPares,

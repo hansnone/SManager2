@@ -457,6 +457,27 @@
                             Command="{x:Bind ViewModel.AnadirParCommand}" />
                         <AppBarSeparator />
                         <AppBarButton
+                            Icon="Play"
+                            Label="Arrancar seleccionados"
+                            Command="{x:Bind ViewModel.ArrancarSeleccionadosCommand}"
+                            ToolTipService.ToolTip="Inicia sólo los pares marcados con casilla" />
+                        <AppBarButton
+                            Icon="Pause"
+                            Label="Pausar seleccionados"
+                            Command="{x:Bind ViewModel.PausarSeleccionadosCommand}"
+                            ToolTipService.ToolTip="Pausa los pares marcados con casilla" />
+                        <AppBarButton
+                            Icon="SelectAll"
+                            Label="Seleccionar todos"
+                            Command="{x:Bind ViewModel.SeleccionarTodosParesCommand}" />
+                        <AppBarSeparator />
+                        <AppBarButton
+                            Icon="Permissions"
+                            Label="Desbloquear borrado (Admin)"
+                            Command="{x:Bind ViewModel.DesbloquearBorradoAdminCommand}"
+                            ToolTipService.ToolTip="Muestra el cuadro nativo de credenciales de Windows para autorizar borrado en origen" />
+                        <AppBarSeparator />
+                        <AppBarButton
                             Icon="Accept"
                             Label="Validar rutas"
                             Command="{x:Bind ViewModel.ValidarRutasCommand}" />
@@ -528,18 +549,35 @@
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Spacing="4">
                                                         <StackPanel Orientation="Horizontal" Spacing="8">
+                                                            <CheckBox
+                                                                IsChecked="{x:Bind Seleccionado, Mode=TwoWay}"
+                                                                VerticalAlignment="Center"
+                                                                Margin="0,0,4,0"
+                                                                ToolTipService.ToolTip="Marcar para arrancar/pausar en conjunto" />
                                                             <TextBlock
                                                                 FontSize="16"
                                                                 FontWeight="SemiBold"
+                                                                VerticalAlignment="Center"
                                                                 Text="{x:Bind Nombre, Mode=OneWay}" />
                                                             <Border
                                                                 Style="{StaticResource ChipEstado}"
+                                                                VerticalAlignment="Center"
                                                                 Background="{x:Bind ClaveEstadoChip, Mode=OneWay, Converter={StaticResource EstadoParBrush}, ConverterParameter=Fondo}">
                                                                 <TextBlock
                                                                     FontSize="11"
                                                                     FontWeight="SemiBold"
                                                                     Foreground="{x:Bind ClaveEstadoChip, Mode=OneWay, Converter={StaticResource EstadoParBrush}, ConverterParameter=Texto}"
                                                                     Text="{x:Bind EtiquetaEstadoActividad, Mode=OneWay}" />
+                                                            </Border>
+                                                            <Border
+                                                                Style="{StaticResource ChipEstado}"
+                                                                VerticalAlignment="Center"
+                                                                Background="{ThemeResource LayerFillColorDefaultBrush}">
+                                                                <TextBlock
+                                                                    FontSize="11"
+                                                                    FontWeight="SemiBold"
+                                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                                    Text="{x:Bind EtiquetaModoSincronizacion, Mode=OneWay}" />
                                                             </Border>
                                                         </StackPanel>
                                                         <StackPanel Spacing="6" Margin="0,4,0,0">
@@ -598,6 +636,20 @@
                                                             Message="{x:Bind TextoPrimerAviso, Mode=OneWay}"
                                                             Severity="Warning"
                                                             Title="Aviso de configuración" />
+                                                        <InfoBar
+                                                            Margin="0,4,0,0"
+                                                            IsClosable="False"
+                                                            IsOpen="{x:Bind TienePurgaMasivaBloqueada, Mode=OneWay}"
+                                                            Message="{x:Bind TextoAlertaPurgaMasiva, Mode=OneWay}"
+                                                            Severity="Error"
+                                                            Title="Purga Masiva Detenida">
+                                                            <InfoBar.ActionButton>
+                                                                <Button
+                                                                    Content="Autorizar Purga Masiva"
+                                                                    Command="{Binding DataContext.AutorizarPurgaMasivaCommand, ElementName=PaginaPrincipal}"
+                                                                    CommandParameter="{x:Bind}" />
+                                                            </InfoBar.ActionButton>
+                                                        </InfoBar>
                                                     </StackPanel>
                                                     <StackPanel
                                                         Grid.Column="1"

@@ -92,6 +92,37 @@ public sealed class ServicioCopia
 
                 var accion = esNuevo ? "Nuevo" : "Actualizado";
                 var tipo = esNuevo ? "NUEVO" : "ACTUALIZADO";
+
+                // Si el par está en Modo 2 (Acumulativo con borrado en origen), borrar en A tras copia confirmada en B (sólo si sesión autenticada por admin)
+                if (par.Modo == ModoSincronizacion.AcumulativoConBorradoOrigen || par.BorrarEnOrigen)
+                {
+                    if (!estado.SesionBorradoDesbloqueada)
+                    {
+                        estado.EncolarLog(par.IdPar, "WARN", $"[SEGURIDAD] Omitido borrado en origen de '{rutaRelativa}': la sesión requiere autenticación de administrador local.");
+                    }
+                    else
+                    {
+                        try
+                        {
+                            var infoDestino = new FileInfo(rutaCompletaDestino);
+                            if (infoDestino.Exists && infoDestino.Length == bytesEsperados)
+                            {
+                                File.Delete(infoArchivo.FullName);
+                                estado.EncolarLog(par.IdPar, "INFO", $"[SEGURIDAD] Archivo eliminado en origen tras copia verificada: {rutaRelativa}");
+                                estado.RegistrarActividad("BORRADO_ORIGEN", rutaRelativa, par.IdPar);
+                            }
+                            else
+                            {
+                                estado.EncolarLog(par.IdPar, "ERROR", $"[SEGURIDAD] Cancelado borrado en origen de '{rutaRelativa}': la verificación en destino falló.");
+                            }
+                        }
+                        catch (Exception exBorrado)
+                        {
+                            estado.EncolarLog(par.IdPar, "ERROR", $"[SEGURIDAD] Error al eliminar archivo en origen '{rutaRelativa}': {exBorrado.Message}");
+                        }
+                    }
+                }
+
                 estado.RegistrarActividad(tipo, rutaRelativa, par.IdPar);
                 estado.EncolarLog(par.IdPar, "INFO", $"{prefijo}{accion}: {rutaRelativa}");
                 estado.ColaEstadisticas.Enqueue(new EstadisticaPar(

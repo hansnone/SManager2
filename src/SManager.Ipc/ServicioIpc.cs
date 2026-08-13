@@ -33,7 +33,12 @@ public sealed class ServicioIpc
             RutasDatos.ObtenerRutaEstado(estado.Perfil), json, cancelacion).ConfigureAwait(false);
     }
 
-    public async Task EnviarComandoAsync(string nombrePerfil, ComandoControl comando, CancellationToken cancelacion = default)
+    public async Task EnviarComandoAsync(
+        string nombrePerfil,
+        ComandoControl comando,
+        List<string>? idsPares = null,
+        bool? desbloquearBorrado = null,
+        CancellationToken cancelacion = default)
     {
         var control = new ControlPerfil
         {
@@ -41,8 +46,13 @@ public sealed class ServicioIpc
             {
                 ComandoControl.Apagar => "APAGAR",
                 ComandoControl.Recargar => "RECARGAR",
+                ComandoControl.IniciarPares => "INICIAR_PARES",
+                ComandoControl.PausarPares => "PAUSAR_PARES",
+                ComandoControl.DesbloquearBorrado => "DESBLOQUEAR_BORRADO",
                 _ => throw new ArgumentOutOfRangeException(nameof(comando))
             },
+            IdsPares = idsPares,
+            DesbloquearBorrado = desbloquearBorrado,
             EmitidoUtc = DateTime.UtcNow.ToString("o")
         };
 
@@ -51,7 +61,7 @@ public sealed class ServicioIpc
             RutasDatos.ObtenerRutaControl(nombrePerfil), json, cancelacion).ConfigureAwait(false);
     }
 
-    public async Task<ComandoControl?> LeerComandoPendienteAsync(string nombrePerfil, CancellationToken cancelacion = default)
+    public async Task<ControlPerfil?> LeerControlPendienteAsync(string nombrePerfil, CancellationToken cancelacion = default)
     {
         var texto = await EscrituraAtomica.LeerTextoConReintentoAsync(
             RutasDatos.ResolverRutaControl(nombrePerfil), cancelacion).ConfigureAwait(false);
@@ -61,7 +71,12 @@ public sealed class ServicioIpc
             return null;
         }
 
-        var control = JsonSerializer.Deserialize<ControlPerfil>(texto, OpcionesJson);
+        return JsonSerializer.Deserialize<ControlPerfil>(texto, OpcionesJson);
+    }
+
+    public async Task<ComandoControl?> LeerComandoPendienteAsync(string nombrePerfil, CancellationToken cancelacion = default)
+    {
+        var control = await LeerControlPendienteAsync(nombrePerfil, cancelacion).ConfigureAwait(false);
         if (control?.Comando is null)
         {
             return null;
@@ -71,6 +86,9 @@ public sealed class ServicioIpc
         {
             "APAGAR" => ComandoControl.Apagar,
             "RECARGAR" => ComandoControl.Recargar,
+            "INICIAR_PARES" => ComandoControl.IniciarPares,
+            "PAUSAR_PARES" => ComandoControl.PausarPares,
+            "DESBLOQUEAR_BORRADO" => ComandoControl.DesbloquearBorrado,
             _ => null
         };
     }

@@ -30,6 +30,18 @@ public sealed class ConfiguracionAplicacion
     public List<ParSincronizacion> Pares { get; set; } = [];
 }
 
+public enum ModoSincronizacion
+{
+    /// <summary>Guarda todos los archivos de A en B. No borra nada en B ni en A. (Principal / Defecto)</summary>
+    AcumulativoSinBorrado = 0,
+
+    /// <summary>Copia de A a B y borra en A tras copia confirmada. Requiere Admin local.</summary>
+    AcumulativoConBorradoOrigen = 1,
+
+    /// <summary>Sincronización espejo idéntica A -> B. Replica copias y borrados de A en B.</summary>
+    Espejo = 2
+}
+
 public sealed class ParSincronizacion
 {
     [JsonPropertyName("id_par")]
@@ -68,4 +80,34 @@ public sealed class ParSincronizacion
     /// </summary>
     [JsonPropertyName("intervalo_polling_segundos")]
     public int? IntervaloPollingSegundos { get; set; }
+
+    /// <summary>
+    /// Modo de operación de este par de sincronización.
+    /// </summary>
+    [JsonPropertyName("modo_sincronizacion")]
+    public ModoSincronizacion Modo { get; set; } = ModoSincronizacion.AcumulativoSinBorrado;
+
+    /// <summary>
+    /// Número máximo de archivos a purgar de golpe en destino en Modo Espejo antes de pausar por protección antidesastre.
+    /// Default: 50.
+    /// </summary>
+    [JsonPropertyName("umbral_purga_masiva_espejo")]
+    public int UmbralPurgaMasivaEspejo { get; set; } = 50;
+
+    /// <summary>
+    /// Obsoleto: Mantenido para compatibilidad con esquemas JSON anteriores.
+    /// Mapea directamente hacia/desde <see cref="ModoSincronizacion.AcumulativoConBorradoOrigen"/>.
+    /// </summary>
+    [JsonPropertyName("borrar_en_origen")]
+    public bool BorrarEnOrigen
+    {
+        get => Modo == ModoSincronizacion.AcumulativoConBorradoOrigen;
+        set
+        {
+            if (value && Modo == ModoSincronizacion.AcumulativoSinBorrado)
+            {
+                Modo = ModoSincronizacion.AcumulativoConBorradoOrigen;
+            }
+        }
+    }
 }

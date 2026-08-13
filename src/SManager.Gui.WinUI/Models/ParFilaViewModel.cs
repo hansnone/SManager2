@@ -39,7 +39,25 @@ public partial class ParFilaViewModel : ObservableObject
     private int? _intervaloPollingSegundos;
 
     [ObservableProperty]
+    private bool _seleccionado;
+
+    [ObservableProperty]
+    private ModoSincronizacion _modo = ModoSincronizacion.AcumulativoSinBorrado;
+
+    [ObservableProperty]
+    private bool _borrarEnOrigen;
+
+    [ObservableProperty]
     private bool _expandido;
+
+    [ObservableProperty]
+    private bool _tienePurgaMasivaBloqueada;
+
+    [ObservableProperty]
+    private int _cantidadArchivosPurgaBloqueada;
+
+    public string TextoAlertaPurgaMasiva =>
+        $"Purga masiva en Modo Espejo pausada por seguridad: {CantidadArchivosPurgaBloqueada} archivos pendientes de eliminar en destino.";
 
     public int TotalCopiados { get; set; }
 
@@ -81,6 +99,14 @@ public partial class ParFilaViewModel : ObservableObject
     /// <summary>Clave para el convertidor de tema (OK, PAUSADO, INACTIVO).</summary>
     public string ClaveEstadoChip =>
         !Habilitado ? "INACTIVO" : Pausado ? "PAUSADO" : "OK";
+
+    /// <summary>Texto del chip visual del modo de sincronización activo.</summary>
+    public string EtiquetaModoSincronizacion => Modo switch
+    {
+        ModoSincronizacion.AcumulativoConBorradoOrigen => "Borrado en Origen",
+        ModoSincronizacion.Espejo => "Espejo (Mirror)",
+        _ => "Acumulativo"
+    };
 
     partial void OnExpandidoChanged(bool value)
     {
@@ -131,7 +157,9 @@ public partial class ParFilaViewModel : ObservableObject
         RutaDestino = RutaDestino,
         FiltroInclusion = FiltroInclusion,
         FiltroExclusion = FiltroExclusion,
-        IntervaloPollingSegundos = IntervaloPollingSegundos
+        IntervaloPollingSegundos = IntervaloPollingSegundos,
+        Modo = Modo,
+        BorrarEnOrigen = Modo == ModoSincronizacion.AcumulativoConBorradoOrigen
     };
 
     private void NotificarResumen()

@@ -198,8 +198,44 @@ public sealed class VigiaPar : IAsyncDisposable
             }
         };
 
+        _vigilante.Deleted += (_, e) =>
+        {
+            if (!string.IsNullOrEmpty(e.Name) && par.Modo == ModoSincronizacion.Espejo)
+            {
+                ProcesarBorradoEspejo(par, Path.Combine(par.RutaOrigen, e.Name));
+            }
+        };
+
         _origenVigilante = origenNorm;
         _estado.EncolarLog(_idPar, "INFO", $"Vigía activo: {par.RutaOrigen}");
+    }
+
+    private void ProcesarBorradoEspejo(ParSincronizacion par, string rutaOrigenCompleta)
+    {
+        var rutaDestino = ComparadorSincronizacion.ObtenerRutaDestino(par, rutaOrigenCompleta);
+        if (string.IsNullOrEmpty(rutaDestino))
+        {
+            return;
+        }
+
+        try
+        {
+            if (File.Exists(rutaDestino))
+            {
+                File.Delete(rutaDestino);
+                _estado.EncolarLog(_idPar, "INFO", $"[ESPEJO] Archivo eliminado en destino por borrado en origen: {Path.GetFileName(rutaDestino)}");
+                _estado.RegistrarActividad("BORRADO_ESPEJO", Path.GetFileName(rutaDestino), _idPar);
+            }
+            else if (Directory.Exists(rutaDestino))
+            {
+                Directory.Delete(rutaDestino, recursive: true);
+                _estado.EncolarLog(_idPar, "INFO", $"[ESPEJO] Carpeta eliminada en destino por borrado en origen: {Path.GetFileName(rutaDestino)}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _estado.EncolarLog(_idPar, "ERROR", $"[ESPEJO] Error al replicar borrado en destino ({rutaDestino}): {ex.Message}");
+        }
     }
 
     private void LiberarVigilante()
@@ -558,6 +594,68 @@ public sealed class VigiaPar : IAsyncDisposable
             catch (Exception ex)
             {
                 _estado.EncolarLog(_idPar, "ERROR", $"Escaneo: {ex.Message}");
+            }
+        }
+
+        if (par.Modo == ModoSincronizacion.Espejo && Directory.Exists(par.RutaDestino) && Directory.Exists(par.RutaOrigen))
+        {
+            try
+            {
+                var rutaRaizDestino = Path.GetFullPath(par.RutaDestino.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                var rutaRaizOrigen = Path.GetFullPath(par.RutaOrigen.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+
+                var huerfanos = new List<(string RutaAbsoluta, string RutaRelativa)>();
+                foreach (var archivoDestino in Directory.EnumerateFiles(par.RutaDestino, "*", SearchOption.AllDirectories))
+                {
+                    cancelacion.ThrowIfCancellationRequested();
+                    var rel = archivoDestino[rutaRaizDestino.Length..].TrimStart('\\', '/');
+                    var equivOrigen = Path.Combine(rutaRaizOrigen, rel);
+
+                    if (!File.Exists(equivOrigen) && ServicioFiltros.PasaFiltros(Path.GetFileName(archivoDestino), par))
+                    {
+                        huerfanos.Add((archivoDestino, rel));
+                    }
+                }
+
+                var umbralSeguridad = Math.Max(1, par.UmbralPurgaMasivaEspejo <= 0 ? 50 : par.UmbralPurgaMasivaEspejo);
+                var fueAutorizadaConscientemente = _estado.AutorizacionPurgaMasivaUnaVez.TryRemove(_idPar, out var autorizada) && autorizada;
+
+                // Guardián Antidesastre: Si la purga supera el umbral de seguridad y NO ha sido autorizada conscientemente
+                if (huerfanos.Count > umbralSeguridad && !fueAutorizadaConscientemente)
+                {
+                    _estado.PurgasMasivasBloqueadas[_idPar] = huerfanos.Count;
+                    _estado.EncolarLog(
+                        _idPar,
+                        "WARN",
+                        $"[ALERTA ESPEJO] Purga masiva detenida por seguridad: {huerfanos.Count} archivos superan el umbral ({umbralSeguridad}). Usa 'smanager autorizar-purga' o el botón en la GUI para autorizarla.");
+                }
+                else
+                {
+                    _estado.PurgasMasivasBloqueadas.TryRemove(_idPar, out _);
+                    if (fueAutorizadaConscientemente && huerfanos.Count > umbralSeguridad)
+                    {
+                        _estado.EncolarLog(_idPar, "INFO", $"[ESPEJO] Ejecutando purga masiva intencionada autorizada por el usuario ({huerfanos.Count} archivos).");
+                    }
+
+                    foreach (var (archivoDestino, rel) in huerfanos)
+                    {
+                        cancelacion.ThrowIfCancellationRequested();
+                        try
+                        {
+                            File.Delete(archivoDestino);
+                            _estado.EncolarLog(_idPar, "INFO", $"[ESPEJO] Purga de archivo huérfano en destino: {rel}");
+                            _estado.RegistrarActividad("PURGA_ESPEJO", rel, _idPar);
+                        }
+                        catch (Exception exPurga)
+                        {
+                            _estado.EncolarLog(_idPar, "ERROR", $"[ESPEJO] Error al purgar en destino '{rel}': {exPurga.Message}");
+                        }
+                    }
+                }
+            }
+            catch (Exception exEspejo)
+            {
+                _estado.EncolarLog(_idPar, "ERROR", $"[ESPEJO] Error en escaneo espejo: {exEspejo.Message}");
             }
         }
 
