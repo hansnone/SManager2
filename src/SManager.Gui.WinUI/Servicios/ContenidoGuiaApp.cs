@@ -13,10 +13,10 @@ public static class ContenidoGuiaApp
             Cuerpo =
                 "1. Abre el asistente desde Inicio → «Asistente de configuración» (o se muestra solo la primera vez).\n"
                 + "2. Elige plantilla, carpeta origen y carpeta destino.\n"
-                + "3. Pulsa «Analizar cambios» para ver qué se copiaría sin tocar archivos.\n"
+                + "3. Pulsa «Analizar cambios» para ver qué archivos se copiarían o eliminarían sin tocar nada en disco.\n"
                 + "4. Guarda e Inicia la sincronización.\n"
                 + "5. Sigue el progreso en Inicio, Monitor y Registro.\n\n"
-                + "Recuerda: es sincronización unidireccional (origen → destino). No borra en destino lo que desaparezca del origen."
+                + "Recuerda: es sincronización unidireccional (origen → destino) con 3 modos seleccionables por par (Acumulativo sin borrado, Acumulativo con borrado en origen o Modo Espejo)."
         },
         new()
         {
@@ -24,20 +24,20 @@ public static class ContenidoGuiaApp
             Cuerpo =
                 "Mantiene una copia actualizada de una carpeta en otra ubicación: disco externo, NAS, unidad de red o carpeta de backup en el mismo PC.\n\n"
                 + "Casos habituales:\n"
-                + "• Copiar fotos a un disco USB.\n"
-                + "• Replicar documentos de trabajo en un servidor.\n"
-                + "• Mantener una carpeta de proyecto en un segundo disco.\n"
+                + "• Copiar fotos a un disco USB (Acumulativo sin borrado).\n"
+                + "• Descargar archivos de una bandeja de entrada hacia un servidor liberando espacio local (Acumulativo con borrado en origen).\n"
+                + "• Mantener una réplica exacta de un proyecto en un segundo disco (Modo Espejo con umbral anti-desastre).\n"
                 + "• Automatizar copias con la CLI (smanager.exe)."
         },
         new()
         {
             Titulo = "¿Qué NO hace SManager?",
             Cuerpo =
-                "• No es sincronización bidireccional (no fusiona dos carpetas activas).\n"
+                "• No es sincronización bidireccional (no fusiona dos carpetas editadas a la vez).\n"
                 + "• No es almacenamiento en la nube por sí solo (copia hacia rutas que tú defines).\n"
-                + "• No resuelve conflictos entre dos copias editadas a la vez.\n"
-                + "• No sustituye un backup con versionado histórico (salvo que guardes varias copias manualmente).\n"
-                + "• No elimina en destino archivos que ya no existan en origen."
+                + "• No resuelve conflictos entre dos copias modificadas simultáneamente.\n"
+                + "• No sustituye un backup con versionado histórico.\n"
+                + "• Por defecto no borra nada en destino (solo en Modo Espejo y protegido por el umbral anti-desastre)."
         },
         new()
         {
@@ -124,17 +124,18 @@ public static class ContenidoGuiaApp
         },
         new()
         {
-            Titulo = "6. Sincronización — pares",
+            Titulo = "6. Sincronización — pares y modos",
             Cuerpo =
                 "Cada par define:\n"
                 + "• Nombre: etiqueta legible.\n"
                 + "• Origen / Destino: carpetas locales o de red accesibles.\n"
-                + "• Incluir: patrones glob separados por ; (* = todo).\n"
-                + "• Excluir: patrones a ignorar (p. ej. ~$*;*.tmp;*.partial;*.lnk).\n"
-                + "• Activo: si está deshabilitado, el par se ignora.\n"
-                + "• Pausado: el par sigue en la config pero no sincroniza hasta reactivarlo.\n\n"
-                + "Validar rutas: comprueba que las carpetas de pares habilitados existen (no guarda en disco).\n\n"
-                + "Quitar par: elimina de la configuración en memoria; pulsa Guardar para persistir."
+                + "• Modo de sincronización:\n"
+                + "  - Acumulativo (sin borrado): copia nuevos y actualizados al destino sin borrar nunca en ninguno de los dos lados.\n"
+                + "  - Acumulativo (borrar en origen): tras verificar tamaño e integridad en destino, elimina el archivo original (requiere autorización de administrador).\n"
+                + "  - Espejo (réplica exacta): elimina en destino los archivos que ya no existan en origen. Incluye un umbral anti-desastre configurable (por defecto 50 archivos) que detiene el borrado masivo y solicita confirmación en la interfaz.\n"
+                + "• Incluir / Excluir: patrones glob de archivos o carpetas separados por ; (p. ej. ~$*;*.tmp;node_modules;.git).\n"
+                + "• Activo / Pausado: controla si el par participa en la sincronización.\n\n"
+                + "Puedes editar o añadir pares con el demonio en marcha; al pulsar Guardar se recarga automáticamente."
         },
         new()
         {

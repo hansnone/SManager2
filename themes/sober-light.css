@@ -1,0 +1,176 @@
+/* ==========================================================================
+   Tema Predeterminado: Sobrio y Profesional (Tema Claro + Azul Marino)
+   Archivo: themes/sober-light.css
+   ========================================================================== */
+
+:root {
+  /* --- 1. PALETA DE COLORES (Variables ajustables) --- */
+  --bg-primary: #F4F6F8;        /* Fondo general: gris hielo muy suave */
+  --bg-surface: #FFFFFF;        /* Fondo para tarjetas, paneles y tablas: blanco puro */
+  --bg-subtle: #E9EEF2;         /* Fondo para cabeceras de tabla o barras secundarias */
+
+  --text-primary: #102A43;      /* Texto principal: gris azulado muy oscuro */
+  --text-secondary: #486581;    /* Texto secundario: subt?tulos y etiquetas */
+  --text-muted: #829AB1;        /* Texto deshabilitado o pistas en campos de texto */
+
+  /* --- AZUL MARINO (Color de acento principal) --- */
+  --accent-primary: #0F2942;    /* Azul marino corporativo para botones principales y cabeceras */
+  --accent-hover: #081827;      /* Azul marino m?s oscuro al pasar el rat?n por encima */
+  --accent-secondary: #243B53;  /* Azul marino medio para elementos activos secundarios */
+  --accent-focus: #BCCCDC;      /* Halo suave de enfoque al usar el teclado (accesibilidad) */
+
+  --border-color: #D9E2EC;      /* L?neas divisorias limpias y discretas */
+
+  /* --- COLORES DE ESTADO --- */
+  --status-success: #1B4332;    /* Verde bosque sobrio para confirmaciones */
+  --status-warning: #9C4221;    /* Ocre oscuro para advertencias */
+  --status-error: #9B2C2C;      /* Rojo burdeos para mensajes de error */
+
+  /* --- 2. TIPOGRAF?A Y ESPACIADO --- */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-size-base: 15px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --shadow-card: 0 1px 3px 0 rgba(16, 42, 67, 0.08);
+}
+
+/* --- 3. RESETEO B?SICO --- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- 4. COMPONENTES REUTILIZABLES --- */
+.app-header {
+  background-color: var(--accent-primary);
+  color: #FFFFFF;
+  padding: 0.875rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--accent-hover);
+}
+
+.app-header h1 {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.main-container {
+  max-width: 1200px;
+  margin: 2rem auto;
+  padding: 0 1.5rem;
+}
+
+.card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.card-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--accent-primary);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.btn-primary {
+  background-color: var(--accent-primary);
+  color: #FFFFFF;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-hover);
+}
+
+.btn-primary:focus-visible {
+  outline: 3px solid var(--accent-focus);
+}
+
+.btn-secondary {
+  background-color: var(--bg-surface);
+  color: var(--accent-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.btn-secondary:hover {
+  background-color: var(--bg-subtle);
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.35rem;
+}
+
+.input-field {
+  width: 100%;
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-focus);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.data-table th {
+  background-color: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.data-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}

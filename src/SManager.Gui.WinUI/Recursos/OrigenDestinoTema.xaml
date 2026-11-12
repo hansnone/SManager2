@@ -1,9 +1,9 @@
 <ResourceDictionary
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <!-- Colores consistentes para origen (azul) y destino (verde) en toda la GUI -->
-    <SolidColorBrush x:Key="OrigenFondoBrush" Color="#1A0078D4" />
-    <SolidColorBrush x:Key="OrigenAcentoBrush" Color="#0078D4" />
-    <SolidColorBrush x:Key="DestinoFondoBrush" Color="#1A107C10" />
-    <SolidColorBrush x:Key="DestinoAcentoBrush" Color="#107C10" />
+    <!-- Paleta sobria para origen (azul marino #0F2942) y destino (verde bosque #1B4332) -->
+    <SolidColorBrush x:Key="OrigenFondoBrush" Color="#140F2942" />
+    <SolidColorBrush x:Key="OrigenAcentoBrush" Color="#FF0F2942" />
+    <SolidColorBrush x:Key="DestinoFondoBrush" Color="#141B4332" />
+    <SolidColorBrush x:Key="DestinoAcentoBrush" Color="#FF1B4332" />
 </ResourceDictionary>

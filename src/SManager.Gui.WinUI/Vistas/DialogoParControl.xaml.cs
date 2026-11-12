@@ -7,14 +7,14 @@ using SManager.Gui.WinUI.Servicios;
 
 namespace SManager.Gui.WinUI.Vistas;
 
-/// <summary>Formulario reutilizable para crear o editar un par dentro de un ContentDialog.</summary>
+/// <summary>Formulario reutilizable para crear o editar un par dentro de un cuadro de diálogo.</summary>
 public sealed partial class DialogoParControl : UserControl
 {
     private readonly ObservableCollection<ReglaFiltroViewModel> _reglasExclusion = [];
 
     private string _idPar = Guid.NewGuid().ToString();
 
-    /// <summary>Notifica al diálogo padre para habilitar o deshabilitar el botón principal.</summary>
+    /// <summary>Notifica al diálogo padre para habilitar o deshabilitar el botón principal de guardado.</summary>
     public event EventHandler? ValidezCambiada;
 
     public DialogoParControl()
@@ -26,7 +26,7 @@ public sealed partial class DialogoParControl : UserControl
         CajaDestino.TextChanged += (_, _) => NotificarValidez();
     }
 
-    /// <summary>True cuando nombre, origen y destino tienen texto (mínimo para aceptar el formulario).</summary>
+    /// <summary>Devuelve true cuando nombre, origen y destino tienen texto válido.</summary>
     public bool EsValido() =>
         !string.IsNullOrWhiteSpace(CajaNombre.Text)
         && !string.IsNullOrWhiteSpace(CajaOrigen.Text)
@@ -34,11 +34,11 @@ public sealed partial class DialogoParControl : UserControl
 
     private void NotificarValidez() => ValidezCambiada?.Invoke(this, EventArgs.Empty);
 
-    /// <summary>Rellena los campos con los datos del par existente o valores por defecto.</summary>
+    /// <summary>Rellena los campos con los datos del par existente o con los valores iniciales por defecto.</summary>
     public void Cargar(ParFilaViewModel? par, bool esEdicion)
     {
         TextoAyuda.Text = esEdicion
-            ? "Modifica las rutas o filtros del par seleccionado."
+            ? "Modifica las rutas, el modo o los filtros del par seleccionado."
             : "Define origen, destino y filtros del nuevo par de sincronización.";
 
         _reglasExclusion.Clear();
@@ -58,6 +58,7 @@ public sealed partial class DialogoParControl : UserControl
             InterruptorActivo.IsOn = true;
             InterruptorPausa.IsOn = false;
             DesplegableModo.SelectedIndex = 0;
+            CajaUmbralPurga.Value = 50;
             ActualizarTextoExplicacionModo();
             CajaPollingPar.Value = 0;
             TextoResultadoPruebaFiltros.Text = string.Empty;
@@ -77,12 +78,13 @@ public sealed partial class DialogoParControl : UserControl
         InterruptorActivo.IsOn = par.Habilitado;
         InterruptorPausa.IsOn = par.Pausado;
         DesplegableModo.SelectedIndex = (int)par.Modo;
+        CajaUmbralPurga.Value = par.UmbralPurgaMasivaEspejo <= 0 ? 50 : par.UmbralPurgaMasivaEspejo;
         ActualizarTextoExplicacionModo();
         CajaPollingPar.Value = par.IntervaloPollingSegundos ?? 0;
         TextoResultadoPruebaFiltros.Text = string.Empty;
     }
 
-    /// <summary>Lee los valores actuales del formulario como modelo editable.</summary>
+    /// <summary>Lee los valores actuales del formulario y construye el ViewModel del par.</summary>
     public ParFilaViewModel ObtenerPar() =>
         new()
         {
@@ -96,7 +98,12 @@ public sealed partial class DialogoParControl : UserControl
             Pausado = InterruptorPausa.IsOn,
             Modo = (ModoSincronizacion)Math.Clamp(DesplegableModo.SelectedIndex, 0, 2),
             BorrarEnOrigen = DesplegableModo.SelectedIndex == 1,
-            IntervaloPollingSegundos = CajaPollingPar.Value <= 0 ? null : (int)CajaPollingPar.Value
+            UmbralPurgaMasivaEspejo = double.IsNaN(CajaUmbralPurga.Value) || CajaUmbralPurga.Value <= 0
+                ? 50
+                : (int)CajaUmbralPurga.Value,
+            IntervaloPollingSegundos = double.IsNaN(CajaPollingPar.Value) || CajaPollingPar.Value <= 0
+                ? null
+                : (int)CajaPollingPar.Value
         };
 
     private void DesplegableModo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -113,10 +120,17 @@ public sealed partial class DialogoParControl : UserControl
 
         TextoExplicacionModo.Text = DesplegableModo.SelectedIndex switch
         {
-            1 => "Acumulativo con borrado en origen: Copia de A a B y elimina en A tras confirmarse en B. Requiere desbloqueo consciente con credenciales de Administrador Local.",
-            2 => "Espejo (Mirror): Sincronización idéntica 1:1. Replica altas/cambios de A en B y elimina en B cualquier archivo o carpeta borrado en A.",
-            _ => "Acumulativo sin borrado (Principal / Por defecto): Copia todos los archivos de A a B. No borra nada en B ni en A aunque desaparezcan de Origen."
+            1 => "Copia los archivos de origen a destino y luego elimina el original en origen tras verificar la copia. Requiere desbloqueo con credenciales de administrador local.",
+            2 => "Sincronización espejo 1:1. Copia altas y cambios hacia destino y elimina en destino los archivos que ya no existan en origen (protegido por límite ante borrado masivo).",
+            _ => "Copia todos los archivos de origen a destino. No elimina nada en destino ni en origen aunque desaparezcan archivos del origen."
         };
+
+        if (CajaUmbralPurga is not null)
+        {
+            CajaUmbralPurga.Visibility = DesplegableModo.SelectedIndex == 2
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
     }
 
     private async void BotonOrigen_Click(object sender, RoutedEventArgs e)

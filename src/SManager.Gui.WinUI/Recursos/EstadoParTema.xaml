@@ -3,39 +3,40 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
+    <!-- Colores semánticos sobrios (alineados con themes/sober-light.css) -->
     <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
-            <SolidColorBrush x:Key="EstadoOkFondo" Color="#FFDFE6DD" />
-            <SolidColorBrush x:Key="EstadoOkTexto" Color="#FF107C10" />
+            <SolidColorBrush x:Key="EstadoOkFondo" Color="#FFE6F0EC" />
+            <SolidColorBrush x:Key="EstadoOkTexto" Color="#FF1B4332" />
 
-            <SolidColorBrush x:Key="EstadoPausadoFondo" Color="#FFFFF4CE" />
-            <SolidColorBrush x:Key="EstadoPausadoTexto" Color="#FF9D5D00" />
+            <SolidColorBrush x:Key="EstadoPausadoFondo" Color="#FFFEF3C7" />
+            <SolidColorBrush x:Key="EstadoPausadoTexto" Color="#FF9C4221" />
 
-            <SolidColorBrush x:Key="EstadoErrorFondo" Color="#FFFDE7E9" />
-            <SolidColorBrush x:Key="EstadoErrorTexto" Color="#FFC42B1C" />
+            <SolidColorBrush x:Key="EstadoErrorFondo" Color="#FFFEE2E2" />
+            <SolidColorBrush x:Key="EstadoErrorTexto" Color="#FF9B2C2C" />
 
-            <SolidColorBrush x:Key="EstadoInactivoFondo" Color="#FFEDEDED" />
-            <SolidColorBrush x:Key="EstadoInactivoTexto" Color="#FF6E6E6E" />
+            <SolidColorBrush x:Key="EstadoInactivoFondo" Color="#FFEDF2F7" />
+            <SolidColorBrush x:Key="EstadoInactivoTexto" Color="#FF57606A" />
 
-            <SolidColorBrush x:Key="EstadoNeutralFondo" Color="#FFF3F3F3" />
-            <SolidColorBrush x:Key="EstadoNeutralTexto" Color="#FF606060" />
+            <SolidColorBrush x:Key="EstadoNeutralFondo" Color="#FFF8F9FA" />
+            <SolidColorBrush x:Key="EstadoNeutralTexto" Color="#FF57606A" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="Dark">
-            <SolidColorBrush x:Key="EstadoOkFondo" Color="#FF1E3A1E" />
-            <SolidColorBrush x:Key="EstadoOkTexto" Color="#FF6CCB5F" />
+            <SolidColorBrush x:Key="EstadoOkFondo" Color="#FF1E3A2F" />
+            <SolidColorBrush x:Key="EstadoOkTexto" Color="#FF74C69D" />
 
             <SolidColorBrush x:Key="EstadoPausadoFondo" Color="#FF3D3520" />
-            <SolidColorBrush x:Key="EstadoPausadoTexto" Color="#FFFFB900" />
+            <SolidColorBrush x:Key="EstadoPausadoTexto" Color="#FFF6AD55" />
 
             <SolidColorBrush x:Key="EstadoErrorFondo" Color="#FF442726" />
-            <SolidColorBrush x:Key="EstadoErrorTexto" Color="#FFFF6B6B" />
+            <SolidColorBrush x:Key="EstadoErrorTexto" Color="#FFFC8181" />
 
-            <SolidColorBrush x:Key="EstadoInactivoFondo" Color="#FF333333" />
-            <SolidColorBrush x:Key="EstadoInactivoTexto" Color="#FFADADAD" />
+            <SolidColorBrush x:Key="EstadoInactivoFondo" Color="#FF2D3748" />
+            <SolidColorBrush x:Key="EstadoInactivoTexto" Color="#FFA0AEC0" />
 
-            <SolidColorBrush x:Key="EstadoNeutralFondo" Color="#FF2D2D2D" />
-            <SolidColorBrush x:Key="EstadoNeutralTexto" Color="#FFB0B0B0" />
+            <SolidColorBrush x:Key="EstadoNeutralFondo" Color="#FF2D3748" />
+            <SolidColorBrush x:Key="EstadoNeutralTexto" Color="#FFCBD5E0" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 </ResourceDictionary>

@@ -40,6 +40,7 @@ public sealed class ServicioIpc
         bool? desbloquearBorrado = null,
         CancellationToken cancelacion = default)
     {
+        // Traducimos el comando tipado a su cadena de texto estándar en control.json
         var control = new ControlPerfil
         {
             Comando = comando switch
@@ -49,6 +50,7 @@ public sealed class ServicioIpc
                 ComandoControl.IniciarPares => "INICIAR_PARES",
                 ComandoControl.PausarPares => "PAUSAR_PARES",
                 ComandoControl.DesbloquearBorrado => "DESBLOQUEAR_BORRADO",
+                ComandoControl.AutorizarPurgaEspejo => "AUTORIZAR_PURGA_ESPEJO",
                 _ => throw new ArgumentOutOfRangeException(nameof(comando))
             },
             IdsPares = idsPares,
@@ -82,6 +84,7 @@ public sealed class ServicioIpc
             return null;
         }
 
+        // Convertimos el texto leído desde control.json al enumerado tipado ComandoControl
         return control.Comando.ToUpperInvariant() switch
         {
             "APAGAR" => ComandoControl.Apagar,
@@ -89,6 +92,7 @@ public sealed class ServicioIpc
             "INICIAR_PARES" => ComandoControl.IniciarPares,
             "PAUSAR_PARES" => ComandoControl.PausarPares,
             "DESBLOQUEAR_BORRADO" => ComandoControl.DesbloquearBorrado,
+            "AUTORIZAR_PURGA_ESPEJO" => ComandoControl.AutorizarPurgaEspejo,
             _ => null
         };
     }

@@ -6,9 +6,8 @@ using SManager.Core.Utilidades;
 namespace SManager.Core.Vigia;
 
 /// <summary>
-/// Vigía por par: FileSystemWatcher + estabilidad + encolado (sin copiar).
-/// Un hilo de tarea por par, aislado con bulkhead pattern.
-/// No propaga borrados del origen al destino (sincronización unidireccional, no espejo).
+/// Vigía por par: combina eventos en tiempo real (FileSystemWatcher), ventana de estabilidad
+/// y barridos diferenciales seguros. Cada par se ejecuta en su propia tarea aislada.
 /// </summary>
 public sealed class VigiaPar : IAsyncDisposable
 {
@@ -146,6 +145,10 @@ public sealed class VigiaPar : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Crea o reconecta el FileSystemWatcher sobre la carpeta origen.
+    /// Se suscribe al evento Error para recuperarse automáticamente si una unidad de red o USB se desconecta.
+    /// </summary>
     private void AsegurarVigilante(ParSincronizacion par)
     {
         var origenNorm = Path.GetFullPath(par.RutaOrigen.Trim());
@@ -161,80 +164,78 @@ public sealed class VigiaPar : IAsyncDisposable
             return;
         }
 
-        _vigilante = new FileSystemWatcher(par.RutaOrigen)
-        {
-            IncludeSubdirectories = true,
-            // 64 KB: límite seguro en Windows; reduce pérdida de eventos en copias masivas.
-            InternalBufferSize = BufferFswBytes,
-            NotifyFilter = NotifyFilters.LastWrite
-                | NotifyFilters.FileName
-                | NotifyFilters.DirectoryName
-                | NotifyFilters.Size
-                | NotifyFilters.Attributes,
-            EnableRaisingEvents = true
-        };
-
-        FileSystemEventHandler manejador = (_, e) =>
-        {
-            if (!string.IsNullOrEmpty(e.Name))
-            {
-                lock (_candadoEventos)
-                {
-                    _colaEventos.Enqueue(Path.Combine(par.RutaOrigen, e.Name!));
-                }
-            }
-        };
-
-        _vigilante.Created += manejador;
-        _vigilante.Changed += manejador;
-        _vigilante.Renamed += (_, e) =>
-        {
-            if (!string.IsNullOrEmpty(e.FullPath))
-            {
-                lock (_candadoEventos)
-                {
-                    _colaEventos.Enqueue(e.FullPath);
-                }
-            }
-        };
-
-        _vigilante.Deleted += (_, e) =>
-        {
-            if (!string.IsNullOrEmpty(e.Name) && par.Modo == ModoSincronizacion.Espejo)
-            {
-                ProcesarBorradoEspejo(par, Path.Combine(par.RutaOrigen, e.Name));
-            }
-        };
-
-        _origenVigilante = origenNorm;
-        _estado.EncolarLog(_idPar, "INFO", $"Vigía activo: {par.RutaOrigen}");
-    }
-
-    private void ProcesarBorradoEspejo(ParSincronizacion par, string rutaOrigenCompleta)
-    {
-        var rutaDestino = ComparadorSincronizacion.ObtenerRutaDestino(par, rutaOrigenCompleta);
-        if (string.IsNullOrEmpty(rutaDestino))
-        {
-            return;
-        }
-
         try
         {
-            if (File.Exists(rutaDestino))
+            _vigilante = new FileSystemWatcher(par.RutaOrigen)
             {
-                File.Delete(rutaDestino);
-                _estado.EncolarLog(_idPar, "INFO", $"[ESPEJO] Archivo eliminado en destino por borrado en origen: {Path.GetFileName(rutaDestino)}");
-                _estado.RegistrarActividad("BORRADO_ESPEJO", Path.GetFileName(rutaDestino), _idPar);
-            }
-            else if (Directory.Exists(rutaDestino))
+                IncludeSubdirectories = true,
+                // 64 KB: límite seguro en Windows; reduce pérdida de eventos en copias masivas.
+                InternalBufferSize = BufferFswBytes,
+                NotifyFilter = NotifyFilters.LastWrite
+                    | NotifyFilters.FileName
+                    | NotifyFilters.DirectoryName
+                    | NotifyFilters.Size
+                    | NotifyFilters.Attributes
+            };
+
+            FileSystemEventHandler manejador = (_, e) =>
             {
-                Directory.Delete(rutaDestino, recursive: true);
-                _estado.EncolarLog(_idPar, "INFO", $"[ESPEJO] Carpeta eliminada en destino por borrado en origen: {Path.GetFileName(rutaDestino)}");
-            }
+                if (!string.IsNullOrEmpty(e.FullPath))
+                {
+                    lock (_candadoEventos)
+                    {
+                        _colaEventos.Enqueue(e.FullPath);
+                    }
+                }
+            };
+
+            _vigilante.Created += manejador;
+            _vigilante.Changed += manejador;
+            _vigilante.Renamed += (_, e) =>
+            {
+                if (!string.IsNullOrEmpty(e.FullPath))
+                {
+                    lock (_candadoEventos)
+                    {
+                        _colaEventos.Enqueue(e.FullPath);
+                    }
+                }
+
+                // Si se renombró un archivo y estamos en Modo Espejo, solicitamos escaneo diferencial para limpiar el nombre antiguo con seguridad.
+                var parActual = ObtenerPar();
+                if (parActual?.Modo == ModoSincronizacion.Espejo)
+                {
+                    _estado.PeticionEscaneoCompleto[_idPar] = true;
+                }
+            };
+
+            // En Modo Espejo canalizamos cualquier borrado a través del escaneo diferencial para que siempre actúe el Guardián Antidesastre.
+            _vigilante.Deleted += (_, _) =>
+            {
+                var parActual = ObtenerPar();
+                if (parActual?.Modo == ModoSincronizacion.Espejo)
+                {
+                    _estado.PeticionEscaneoCompleto[_idPar] = true;
+                }
+            };
+
+            // Si la red o el disco USB sufren un corte o el buffer se desborda, liberamos el watcher y programamos rescate.
+            _vigilante.Error += (_, e) =>
+            {
+                var motivo = e.GetException()?.Message ?? "error desconocido en el sistema de archivos";
+                _estado.EncolarLog(_idPar, "WARN", $"Vigilante interrumpido ({motivo}). Se reconectará automáticamente.");
+                LiberarVigilante();
+                _estado.PeticionEscaneoCompleto[_idPar] = true;
+            };
+
+            _vigilante.EnableRaisingEvents = true;
+            _origenVigilante = origenNorm;
+            _estado.EncolarLog(_idPar, "INFO", $"Vigía activo: {par.RutaOrigen}");
         }
         catch (Exception ex)
         {
-            _estado.EncolarLog(_idPar, "ERROR", $"[ESPEJO] Error al replicar borrado en destino ({rutaDestino}): {ex.Message}");
+            LiberarVigilante();
+            _estado.EncolarLog(_idPar, "WARN", $"No se pudo iniciar el vigilante en '{par.RutaOrigen}': {ex.Message}");
         }
     }
 
@@ -245,10 +246,20 @@ public sealed class VigiaPar : IAsyncDisposable
             return;
         }
 
-        _vigilante.EnableRaisingEvents = false;
-        _vigilante.Dispose();
-        _vigilante = null;
-        _origenVigilante = string.Empty;
+        try
+        {
+            _vigilante.EnableRaisingEvents = false;
+            _vigilante.Dispose();
+        }
+        catch
+        {
+            // Ignorar errores al liberar un watcher cuya unidad ya se desconectó.
+        }
+        finally
+        {
+            _vigilante = null;
+            _origenVigilante = string.Empty;
+        }
     }
 
     private int DrenarEventos(ParSincronizacion par)
@@ -322,7 +333,8 @@ public sealed class VigiaPar : IAsyncDisposable
             return ResultadoRegistro.Ignorado;
         }
 
-        if (!ServicioFiltros.PasaFiltros(info.Name, par))
+        var rutaRelativa = ComparadorSincronizacion.ObtenerRutaRelativa(par, info.FullName);
+        if (!ServicioFiltros.PasaFiltros(info.Name, par, rutaRelativa))
         {
             return ResultadoRegistro.Ignorado;
         }
@@ -411,7 +423,8 @@ public sealed class VigiaPar : IAsyncDisposable
                     continue;
                 }
 
-                if (!ServicioFiltros.PasaFiltros(info.Name, par))
+                var rutaRelativa = ComparadorSincronizacion.ObtenerRutaRelativa(par, info.FullName);
+                if (!ServicioFiltros.PasaFiltros(info.Name, par, rutaRelativa))
                 {
                     aEliminar.Add(clave);
                     continue;
@@ -597,6 +610,7 @@ public sealed class VigiaPar : IAsyncDisposable
             }
         }
 
+        // Si el par está en Modo Espejo, evaluamos los archivos huérfanos en destino pasando siempre por el Guardián Antidesastre.
         if (par.Modo == ModoSincronizacion.Espejo && Directory.Exists(par.RutaDestino) && Directory.Exists(par.RutaOrigen))
         {
             try
@@ -608,10 +622,15 @@ public sealed class VigiaPar : IAsyncDisposable
                 foreach (var archivoDestino in Directory.EnumerateFiles(par.RutaDestino, "*", SearchOption.AllDirectories))
                 {
                     cancelacion.ThrowIfCancellationRequested();
+                    if (archivoDestino.EndsWith(".smanager.tmp", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
                     var rel = archivoDestino[rutaRaizDestino.Length..].TrimStart('\\', '/');
                     var equivOrigen = Path.Combine(rutaRaizOrigen, rel);
 
-                    if (!File.Exists(equivOrigen) && ServicioFiltros.PasaFiltros(Path.GetFileName(archivoDestino), par))
+                    if (!File.Exists(equivOrigen) && ServicioFiltros.PasaFiltros(Path.GetFileName(archivoDestino), par, rel))
                     {
                         huerfanos.Add((archivoDestino, rel));
                     }
@@ -620,7 +639,7 @@ public sealed class VigiaPar : IAsyncDisposable
                 var umbralSeguridad = Math.Max(1, par.UmbralPurgaMasivaEspejo <= 0 ? 50 : par.UmbralPurgaMasivaEspejo);
                 var fueAutorizadaConscientemente = _estado.AutorizacionPurgaMasivaUnaVez.TryRemove(_idPar, out var autorizada) && autorizada;
 
-                // Guardián Antidesastre: Si la purga supera el umbral de seguridad y NO ha sido autorizada conscientemente
+                // Guardián Antidesastre: si la purga supera el umbral y no fue autorizada conscientemente, bloqueamos el borrado.
                 if (huerfanos.Count > umbralSeguridad && !fueAutorizadaConscientemente)
                 {
                     _estado.PurgasMasivasBloqueadas[_idPar] = huerfanos.Count;
@@ -664,7 +683,7 @@ public sealed class VigiaPar : IAsyncDisposable
         if (revisados > 0 && candidatos == 0 && yaSincronizados == 0)
         {
             _estado.EncolarLog(_idPar, "WARN",
-                $"Ningún archivo pasó el filtro de inclusión '{par.FiltroInclusion}'. Revisa la columna Inclusion en la GUI.");
+                $"Ningún archivo pasó el filtro de inclusión '{par.FiltroInclusion}'. Revisa la columna Inclusión en la GUI.");
         }
         await Task.CompletedTask.ConfigureAwait(false);
     }

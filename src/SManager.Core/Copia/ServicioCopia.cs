@@ -5,15 +5,17 @@ using SManager.Core.Utilidades;
 namespace SManager.Core.Copia;
 
 /// <summary>
-/// Único punto de copia física origen → destino con reintentos y backoff.
-/// Sincronización unidireccional: copia altas y cambios; nunca borra en destino
-/// aunque el archivo desaparezca del origen (no es espejo bidireccional).
+/// Único punto de copia física origen → destino con escritura atómica (.smanager.tmp),
+/// preservación de fecha de modificación original, reintentos y retroceso exponencial (backoff).
 /// </summary>
 public sealed class ServicioCopia
 {
     private const int MaxIntentos = 5;
     private const string SufijoArchivoTemporal = ".smanager.tmp";
 
+    /// <summary>
+    /// Comprueba si el archivo de origen debe copiarse y ejecuta la transferencia segura hacia el destino.
+    /// </summary>
     public ResultadoCopia EjecutarCopiaCondicional(
         EstadoMotor estado,
         string rutaCompletaOrigen,
@@ -36,11 +38,19 @@ public sealed class ServicioCopia
             return ResultadoCopia.Vacio;
         }
 
-        if (!ServicioFiltros.PasaFiltros(infoArchivo.Name, par))
+        var rutaRelativa = ComparadorSincronizacion.ObtenerRutaRelativa(par, infoArchivo.FullName);
+        if (string.IsNullOrEmpty(rutaRelativa))
         {
             return ResultadoCopia.Vacio;
         }
 
+        // Evaluamos tanto el nombre del archivo como su ruta relativa para respetar exclusiones de carpetas.
+        if (!ServicioFiltros.PasaFiltros(infoArchivo.Name, par, rutaRelativa))
+        {
+            return ResultadoCopia.Vacio;
+        }
+
+        // Si el archivo es un marcador en la nube (OneDrive sin descargar), lo enviamos a la cola de hidratación.
         if (OneDrivePlaceholder.EsPlaceholder(infoArchivo.Attributes))
         {
             EncolarHidratacion(estado, par.IdPar, infoArchivo.FullName);
@@ -54,7 +64,6 @@ public sealed class ServicioCopia
         }
 
         var directorioDestino = Path.GetDirectoryName(rutaCompletaDestino);
-
         if (!string.IsNullOrEmpty(directorioDestino) && !Directory.Exists(directorioDestino))
         {
             try
@@ -74,26 +83,28 @@ public sealed class ServicioCopia
         }
 
         var esNuevo = !File.Exists(rutaCompletaDestino);
-        var rutaRaizOrigen = Path.GetFullPath(
-            par.RutaOrigen.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-        var rutaRelativa = infoArchivo.FullName[rutaRaizOrigen.Length..].TrimStart('\\', '/');
 
+        // Bucle de reintentos para tolerar bloqueos temporales de otros programas o microcortes de red.
         for (var intento = 1; intento <= MaxIntentos; intento++)
         {
             try
             {
+                infoArchivo.Refresh();
                 var bytesEsperados = infoArchivo.Length;
+                var mtimeOrigenUtc = infoArchivo.LastWriteTimeUtc;
+
                 CopiarArchivoAtomico(
                     infoArchivo.FullName,
                     rutaCompletaDestino,
                     estado,
                     rutaCompletaOrigen,
-                    bytesEsperados);
+                    bytesEsperados,
+                    mtimeOrigenUtc);
 
                 var accion = esNuevo ? "Nuevo" : "Actualizado";
                 var tipo = esNuevo ? "NUEVO" : "ACTUALIZADO";
 
-                // Si el par está en Modo 2 (Acumulativo con borrado en origen), borrar en A tras copia confirmada en B (sólo si sesión autenticada por admin)
+                // Si el par está en Modo 1 (Acumulativo con borrado en origen), borramos en origen solo tras verificar la copia en destino.
                 if (par.Modo == ModoSincronizacion.AcumulativoConBorradoOrigen || par.BorrarEnOrigen)
                 {
                     if (!estado.SesionBorradoDesbloqueada)
@@ -178,13 +189,17 @@ public sealed class ServicioCopia
         par.TotalErrores += errores;
     }
 
-    /// <summary>Escribe en .smanager.tmp y renombra; el destino previo no se toca hasta el final.</summary>
+    /// <summary>
+    /// Escribe primero en un archivo temporal (.smanager.tmp), conserva su fecha original y lo renombra al final.
+    /// Así nunca queda un archivo corrupto o a medias si se interrumpe la corriente o la red.
+    /// </summary>
     private static void CopiarArchivoAtomico(
         string origen,
         string destinoFinal,
         EstadoMotor estado,
         string claveProgreso,
-        long bytesTotales)
+        long bytesTotales,
+        DateTime mtimeOrigenUtc)
     {
         var rutaTemporal = destinoFinal + SufijoArchivoTemporal;
         EliminarTemporalSiExiste(rutaTemporal);
@@ -198,6 +213,16 @@ public sealed class ServicioCopia
             {
                 throw new IOException(
                     $"Verificación de tamaño fallida: origen {bytesTotales} B, temporal {tamCopiado} B");
+            }
+
+            // Conservamos la fecha de modificación original del archivo para mantener metadatos fieles en el destino.
+            try
+            {
+                File.SetLastWriteTimeUtc(rutaTemporal, mtimeOrigenUtc);
+            }
+            catch
+            {
+                // Algunos sistemas de archivos en red pueden restringir el cambio de fecha; no abortamos la copia por ello.
             }
 
             File.Move(rutaTemporal, destinoFinal, overwrite: true);
@@ -222,11 +247,11 @@ public sealed class ServicioCopia
         }
         catch
         {
-            // Limpieza best-effort; el rename fallará si el temporal está corrupto.
+            // Limpieza best-effort; el rename fallará si el temporal sigue bloqueado.
         }
     }
 
-    /// <summary>Copia por streaming reportando bytes al monitor (IPC cada ~5% o 512 KiB).</summary>
+    /// <summary>Copia por bloques de 1 MiB reportando el progreso en tiempo real al monitor IPC.</summary>
     private static void CopiarArchivoConProgreso(
         string origen,
         string destino,
@@ -248,7 +273,6 @@ public sealed class ServicioCopia
         int leidos;
         while ((leidos = flujoOrigen.Read(buffer, 0, buffer.Length)) > 0)
         {
-            // Permite salir pronto cuando el usuario pulsa Detener.
             if (estado.SolicitudParadaCopiadores)
             {
                 throw new OperationCanceledException("Copia interrumpida por apagado del demonio.");
@@ -290,4 +314,3 @@ public readonly record struct ResultadoCopia(int Copiados, int Errores)
 {
     public static ResultadoCopia Vacio => new(0, 0);
 }
-

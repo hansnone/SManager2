@@ -45,6 +45,7 @@ public sealed partial class MainPage : Page
         ControlAsistente.ViewModel = ViewModel.Asistente;
         ViewModel.RegistroDesplazarAlFinalSolicitado += ViewModel_RegistroDesplazarAlFinalSolicitado;
         ViewModel.ModoInterfazCambiado += ViewModel_ModoInterfazCambiado;
+        ViewModel.NavegarSeccionSolicitado += (_, tag) => SeleccionarSeccionPorTag(tag);
         Loaded += MainPage_Loaded;
     }
 

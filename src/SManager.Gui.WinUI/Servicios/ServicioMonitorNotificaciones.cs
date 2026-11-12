@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using SManager.Gui.WinUI.Models;
 
 namespace SManager.Gui.WinUI.Servicios;
@@ -29,16 +30,25 @@ public sealed class ContextoEvaluacionNotificaciones
     public required IReadOnlyList<LineaRegistroViewModel> LineasRegistro { get; init; }
 }
 
-/// <summary>Detecta transiciones de estado, rutas, log y pares; emite toasts sin spam.</summary>
+/// <summary>
+/// Detecta transiciones de estado, disponibilidad de rutas en segundo plano, errores en el log y cambios de pares.
+/// Las comprobaciones de rutas de red o disco se ejecutan de forma asíncrona fuera del hilo de la interfaz.
+/// </summary>
 public sealed class ServicioMonitorNotificaciones
 {
+    private static readonly TimeSpan IntervaloVerificacionRutas = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan TimeoutComprobacionRuta = TimeSpan.FromSeconds(3);
+
     private bool? _ultimoEnEjecucion;
     private int _ultimosErrores;
     private bool _detencionIntencional;
     private int _lineasLogAnalizadas;
     private bool _notificadoDiscoLlenoSesion;
     private bool _notificadoPermisosSesion;
+    private DateTime _ultimaVerificacionRutasUtc = DateTime.MinValue;
+    private int _verificandoRutasEnFondo;
 
+    private readonly ConcurrentDictionary<string, bool> _cacheRutasAccesibles = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _rutasInaccesiblesNotificadas = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, (bool Habilitado, bool Pausado)> _snapshotPares = new(StringComparer.OrdinalIgnoreCase);
 
@@ -53,11 +63,13 @@ public sealed class ServicioMonitorNotificaciones
         _lineasLogAnalizadas = 0;
         _notificadoDiscoLlenoSesion = false;
         _notificadoPermisosSesion = false;
+        _ultimaVerificacionRutasUtc = DateTime.MinValue;
+        _cacheRutasAccesibles.Clear();
         _rutasInaccesiblesNotificadas.Clear();
         _snapshotPares.Clear();
     }
 
-    /// <summary>Evalúa el estado IPC, rutas, log y pares; muestra toasts cuando cambia la situación.</summary>
+    /// <summary>Evalúa el estado IPC, rutas, log y pares; muestra avisos de Windows cuando cambia la situación.</summary>
     public void Evaluar(ContextoEvaluacionNotificaciones contexto)
     {
         if (!contexto.NotificacionesHabilitadas)
@@ -139,15 +151,49 @@ public sealed class ServicioMonitorNotificaciones
         }
     }
 
+    /// <summary>
+    /// Programa la verificación de carpetas en un hilo de fondo cada 10 segundos y lee el resultado cacheado sin bloquear la UI.
+    /// </summary>
     private void EvaluarDisponibilidadRutas(ContextoEvaluacionNotificaciones contexto)
     {
         if (!contexto.EnEjecucion)
         {
             _rutasInaccesiblesNotificadas.Clear();
+            _cacheRutasAccesibles.Clear();
             return;
         }
 
-        foreach (var par in contexto.Pares.Where(p => p.Habilitado && !p.Pausado))
+        var paresActivos = contexto.Pares.Where(p => p.Habilitado && !p.Pausado).ToList();
+        var ahora = DateTime.UtcNow;
+
+        if (ahora - _ultimaVerificacionRutasUtc >= IntervaloVerificacionRutas
+            && Interlocked.CompareExchange(ref _verificandoRutasEnFondo, 1, 0) == 0)
+        {
+            _ultimaVerificacionRutasUtc = ahora;
+            var rutasAVerificar = paresActivos
+                .SelectMany(p => new[] { p.RutaOrigen, p.RutaDestino })
+                .Where(r => !string.IsNullOrWhiteSpace(r))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    foreach (var ruta in rutasAVerificar)
+                    {
+                        var accesible = await ComprobarRutaConTimeoutAsync(ruta).ConfigureAwait(false);
+                        _cacheRutasAccesibles[ruta] = accesible;
+                    }
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _verificandoRutasEnFondo, 0);
+                }
+            });
+        }
+
+        foreach (var par in paresActivos)
         {
             EvaluarRutaPar(par, par.RutaDestino, esDestino: true);
             EvaluarRutaPar(par, par.RutaOrigen, esDestino: false);
@@ -164,8 +210,13 @@ public sealed class ServicioMonitorNotificaciones
             return;
         }
 
+        // Solo actuamos cuando la comprobación asíncrona en segundo plano ya ha reportado estado para esta ruta.
+        if (!_cacheRutasAccesibles.TryGetValue(ruta, out var accesible))
+        {
+            return;
+        }
+
         var clave = $"{par.IdPar}|{(esDestino ? "destino" : "origen")}";
-        var accesible = RutaAccesible(ruta);
 
         if (!accesible)
         {
@@ -192,6 +243,20 @@ public sealed class ServicioMonitorNotificaciones
         else
         {
             _rutasInaccesiblesNotificadas.Remove(clave);
+        }
+    }
+
+    private static async Task<bool> ComprobarRutaConTimeoutAsync(string ruta)
+    {
+        try
+        {
+            return await Task.Run(() => Directory.Exists(ruta))
+                .WaitAsync(TimeoutComprobacionRuta)
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -320,18 +385,6 @@ public sealed class ServicioMonitorNotificaciones
 
     private static string ResumenSesion(ContextoEvaluacionNotificaciones contexto) =>
         $"Perfil «{contexto.Perfil}»: {contexto.CopiadosSesion:N0} archivos copiados, {contexto.ErroresSesion:N0} errores.";
-
-    private static bool RutaAccesible(string ruta)
-    {
-        try
-        {
-            return Directory.Exists(ruta);
-        }
-        catch
-        {
-            return false;
-        }
-    }
 
     private static bool EsRutaRed(string ruta) =>
         ruta.StartsWith(@"\\", StringComparison.Ordinal);

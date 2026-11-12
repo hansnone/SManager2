@@ -11,6 +11,15 @@
                 <ResourceDictionary Source="Recursos/EstadoParTema.xaml" />
                 <ResourceDictionary Source="Recursos/OrigenDestinoTema.xaml" />
             </ResourceDictionary.MergedDictionaries>
+
+            <!-- Paleta Azul Marino Sobrio (alineada con themes/sober-light.css) -->
+            <Color x:Key="SystemAccentColor">#FF0F2942</Color>
+            <Color x:Key="SystemAccentColorLight1">#FF1D4E89</Color>
+            <Color x:Key="SystemAccentColorLight2">#FF2B6CB0</Color>
+            <Color x:Key="SystemAccentColorDark1">#FF0A1C2E</Color>
+            <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#FF0F2942" />
+            <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#FF1D4E89" />
+            <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#FF0A1C2E" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

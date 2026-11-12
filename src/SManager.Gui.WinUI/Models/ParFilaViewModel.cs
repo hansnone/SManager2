@@ -5,7 +5,7 @@ using SManager.Gui.Shared.Servicios;
 
 namespace SManager.Gui.WinUI.Models;
 
-/// <summary>Par de sincronización mostrado como tarjeta en la GUI.</summary>
+/// <summary>Par de sincronización mostrado como tarjeta editable en la interfaz gráfica.</summary>
 public partial class ParFilaViewModel : ObservableObject
 {
     public string IdPar { get; init; } = Guid.NewGuid().ToString();
@@ -48,16 +48,21 @@ public partial class ParFilaViewModel : ObservableObject
     private bool _borrarEnOrigen;
 
     [ObservableProperty]
+    private int _umbralPurgaMasivaEspejo = 50;
+
+    [ObservableProperty]
     private bool _expandido;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TextoAlertaPurgaMasiva))]
     private bool _tienePurgaMasivaBloqueada;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TextoAlertaPurgaMasiva))]
     private int _cantidadArchivosPurgaBloqueada;
 
     public string TextoAlertaPurgaMasiva =>
-        $"Purga masiva en Modo Espejo pausada por seguridad: {CantidadArchivosPurgaBloqueada} archivos pendientes de eliminar en destino.";
+        $"Purga masiva en modo espejo pausada por seguridad: {CantidadArchivosPurgaBloqueada} archivos pendientes de eliminar en destino.";
 
     public int TotalCopiados { get; set; }
 
@@ -100,17 +105,24 @@ public partial class ParFilaViewModel : ObservableObject
     public string ClaveEstadoChip =>
         !Habilitado ? "INACTIVO" : Pausado ? "PAUSADO" : "OK";
 
-    /// <summary>Texto del chip visual del modo de sincronización activo.</summary>
+    /// <summary>Texto del chip visual del modo de sincronización activo (Sentence case en español).</summary>
     public string EtiquetaModoSincronizacion => Modo switch
     {
-        ModoSincronizacion.AcumulativoConBorradoOrigen => "Borrado en Origen",
-        ModoSincronizacion.Espejo => "Espejo (Mirror)",
+        ModoSincronizacion.AcumulativoConBorradoOrigen => "Borrado en origen",
+        ModoSincronizacion.Espejo => "Espejo",
         _ => "Acumulativo"
     };
 
     partial void OnExpandidoChanged(bool value)
     {
         OnPropertyChanged(nameof(GlifoExpansion));
+    }
+
+    partial void OnModoChanged(ModoSincronizacion value)
+    {
+        BorrarEnOrigen = value == ModoSincronizacion.AcumulativoConBorradoOrigen;
+        OnPropertyChanged(nameof(EtiquetaModoSincronizacion));
+        ActualizarAvisosRiesgo();
     }
 
     /// <summary>Glifo MDL2 para expandir/colapsar la tarjeta.</summary>
@@ -138,7 +150,7 @@ public partial class ParFilaViewModel : ObservableObject
     [RelayCommand]
     private void AlternarExpansion() => Expandido = !Expandido;
 
-    /// <summary>Recalcula avisos cuando cambian rutas o filtros.</summary>
+    /// <summary>Recalcula avisos cuando cambian rutas, modo o filtros.</summary>
     public void ActualizarAvisosRiesgo()
     {
         AvisosRiesgo = ServicioValidacionRiesgoPar.DetectarAvisos(ComoModeloCore());
@@ -159,6 +171,7 @@ public partial class ParFilaViewModel : ObservableObject
         FiltroExclusion = FiltroExclusion,
         IntervaloPollingSegundos = IntervaloPollingSegundos,
         Modo = Modo,
+        UmbralPurgaMasivaEspejo = UmbralPurgaMasivaEspejo,
         BorrarEnOrigen = Modo == ModoSincronizacion.AcumulativoConBorradoOrigen
     };
 

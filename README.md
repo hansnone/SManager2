@@ -15,10 +15,16 @@ Casos de uso habituales:
 
 ## Qué NO hace
 
-- **No** es sincronización bidireccional (no fusiona dos carpetas activas).
+- **No** es sincronización bidireccional (no fusiona dos carpetas activas editadas simultáneamente).
 - **No** es un servicio de nube por sí solo (tú defines origen y destino).
-- **No** elimina en destino archivos que desaparezcan del origen.
+- **No** elimina archivos en destino salvo que elijas expresamente el **Modo Espejo** (que cuenta con un umbral anti-desastre configurable).
 - **No** sustituye un sistema de backup con historial de versiones.
+
+## Modos de sincronización por par
+
+1. **Acumulativo (sin borrado)** *(predeterminado)*: Copia archivos nuevos y actualizados de origen a destino preservando la fecha de modificación (`LastWriteTimeUtc`). Nunca borra archivos en destino aunque desaparezcan del origen.
+2. **Acumulativo (borrar en origen)**: Tras copiar y verificar el archivo en destino, elimina el original en origen (requiere desbloqueo con credenciales de administrador en Windows).
+3. **Modo Espejo (réplica exacta)**: Mantiene el destino idéntico al origen eliminando los archivos huérfanos en destino. Incluye un **umbral anti-desastre** por par (por defecto 50 archivos) que bloquea cualquier purga masiva accidental y solicita confirmación en la interfaz.
 
 ## Interfaz (capturas)
 
@@ -33,10 +39,12 @@ Casos de uso habituales:
 ## Características
 
 - Varios **perfiles** independientes (cada uno con su configuración, log y telemetría).
-- **Pares de sincronización** con filtros de inclusión/exclusión (patrones glob).
-- Motor con cola de copia, hidratación de archivos en la nube, deduplicación y polling de seguridad.
+- **Pares de sincronización** con 3 modos de operación y filtros de inclusión/exclusión para archivos y subcarpetas (`node_modules`, `.git`, `~$*`, etc.).
+- **Vista previa detallada** en «Analizar cambios»: muestra cada archivo nuevo, modificado o pendiente de purgar en Modo Espejo antes de tocar el disco.
+- **Edición en caliente**: añade, modifica o pausa pares con el demonio en marcha y aplica los cambios automáticamente al pulsar **Guardar**.
+- Motor resiliente con preservación de marcas de tiempo (`LastWriteTimeUtc`), reconexión automática de `FileSystemWatcher`, hidratación de archivos en la nube, deduplicación y polling de seguridad.
 - **GUI** con asistente de primer uso, monitor en vivo, registro filtrable, estadísticas y ajustes avanzados.
-- **Modo básico / avanzado**, tema claro/oscuro, historial de sesiones y atajos de teclado.
+- **Modo básico / avanzado**, tema claro/oscuro en paleta Azul Marino Sobrio, historial de sesiones y atajos de teclado.
 - **CLI** (`smanager.exe`) para automatización e integración con scripts.
 - Instalador único **self-contained** (no requiere instalar .NET ni Windows App SDK).
 

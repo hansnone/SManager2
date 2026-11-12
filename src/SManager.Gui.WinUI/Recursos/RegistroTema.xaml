@@ -3,23 +3,24 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
+    <!-- Colores de líneas del registro alineados con la paleta Azul Marino Sobrio -->
     <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
-            <SolidColorBrush x:Key="RegistroInfoFondo" Color="#FFF5F5F5" />
-            <SolidColorBrush x:Key="RegistroInfoNivel" Color="#FF606060" />
-            <SolidColorBrush x:Key="RegistroInfoMensaje" Color="#FF202020" />
+            <SolidColorBrush x:Key="RegistroInfoFondo" Color="#FFF8F9FA" />
+            <SolidColorBrush x:Key="RegistroInfoNivel" Color="#FF57606A" />
+            <SolidColorBrush x:Key="RegistroInfoMensaje" Color="#FF24292F" />
 
-            <SolidColorBrush x:Key="RegistroErrorFondo" Color="#FFFDE7E9" />
-            <SolidColorBrush x:Key="RegistroErrorNivel" Color="#FFC42B1C" />
-            <SolidColorBrush x:Key="RegistroErrorMensaje" Color="#FF3B1F1F" />
+            <SolidColorBrush x:Key="RegistroErrorFondo" Color="#FFFEE2E2" />
+            <SolidColorBrush x:Key="RegistroErrorNivel" Color="#FF9B2C2C" />
+            <SolidColorBrush x:Key="RegistroErrorMensaje" Color="#FF4A1515" />
 
-            <SolidColorBrush x:Key="RegistroWarnFondo" Color="#FFFFF8E1" />
-            <SolidColorBrush x:Key="RegistroWarnNivel" Color="#FF9D5D00" />
+            <SolidColorBrush x:Key="RegistroWarnFondo" Color="#FFFEF3C7" />
+            <SolidColorBrush x:Key="RegistroWarnNivel" Color="#FF9C4221" />
             <SolidColorBrush x:Key="RegistroWarnMensaje" Color="#FF5C3B00" />
 
-            <SolidColorBrush x:Key="RegistroPendienteFondo" Color="#FFEFF6FF" />
-            <SolidColorBrush x:Key="RegistroPendienteNivel" Color="#FF0063B1" />
-            <SolidColorBrush x:Key="RegistroPendienteMensaje" Color="#FF004578" />
+            <SolidColorBrush x:Key="RegistroPendienteFondo" Color="#FFEBF2FA" />
+            <SolidColorBrush x:Key="RegistroPendienteNivel" Color="#FF0F2942" />
+            <SolidColorBrush x:Key="RegistroPendienteMensaje" Color="#FF1D4E89" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="Dark">
@@ -28,16 +29,16 @@
             <SolidColorBrush x:Key="RegistroInfoMensaje" Color="#FFE8E8E8" />
 
             <SolidColorBrush x:Key="RegistroErrorFondo" Color="#FF442726" />
-            <SolidColorBrush x:Key="RegistroErrorNivel" Color="#FFFF6B6B" />
+            <SolidColorBrush x:Key="RegistroErrorNivel" Color="#FFFC8181" />
             <SolidColorBrush x:Key="RegistroErrorMensaje" Color="#FFFFD4D4" />
 
             <SolidColorBrush x:Key="RegistroWarnFondo" Color="#FF3D3520" />
-            <SolidColorBrush x:Key="RegistroWarnNivel" Color="#FFFFB900" />
+            <SolidColorBrush x:Key="RegistroWarnNivel" Color="#FFF6AD55" />
             <SolidColorBrush x:Key="RegistroWarnMensaje" Color="#FFFFE8A3" />
 
             <SolidColorBrush x:Key="RegistroPendienteFondo" Color="#FF1A2F45" />
-            <SolidColorBrush x:Key="RegistroPendienteNivel" Color="#FF60CDFF" />
-            <SolidColorBrush x:Key="RegistroPendienteMensaje" Color="#FFB3E5FF" />
+            <SolidColorBrush x:Key="RegistroPendienteNivel" Color="#FF63B3ED" />
+            <SolidColorBrush x:Key="RegistroPendienteMensaje" Color="#FFBEE3F8" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 </ResourceDictionary>

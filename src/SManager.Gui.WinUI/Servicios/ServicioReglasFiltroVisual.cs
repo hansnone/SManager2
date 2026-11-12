@@ -67,7 +67,8 @@ public static class ServicioReglasFiltroVisual
             try
             {
                 var nombre = Path.GetFileName(ruta);
-                if (ServicioFiltros.PasaFiltros(nombre, par))
+                var rutaRelativa = Path.GetRelativePath(rutaCarpeta, ruta);
+                if (ServicioFiltros.PasaFiltros(nombre, par, rutaRelativa))
                 {
                     copiados++;
                 }

@@ -10,7 +10,7 @@
     HorizontalAlignment="Stretch"
     HorizontalContentAlignment="Stretch">
 
-    <!-- MaxHeight: el ContentDialog limita la altura; el scroll deja ver exclusiones y toggles -->
+    <!-- MaxHeight: el ContentDialog limita la altura; el scroll deja ver exclusiones y opciones -->
     <ScrollViewer
         MaxHeight="520"
         HorizontalAlignment="Stretch"
@@ -24,14 +24,14 @@
                 Text="Define origen, destino y filtros del par de sincronización."
                 TextWrapping="WrapWholeWords" />
 
-            <TextBox x:Name="CajaNombre" Header="Nombre" PlaceholderText="Nombre del par" />
+            <TextBox x:Name="CajaNombre" Header="Nombre" PlaceholderText="Ej. Fotos familiares" />
 
             <!-- Ruta + botón en columna: evita recorte lateral del ContentDialog (~548 px) -->
             <StackPanel Spacing="6">
                 <TextBox
                     x:Name="CajaOrigen"
                     Header="Carpeta origen"
-                    PlaceholderText="Ruta de origen" />
+                    PlaceholderText="Ej. C:\Usuarios\Marta\Documentos" />
                 <Button
                     HorizontalAlignment="Left"
                     Click="BotonOrigen_Click"
@@ -43,7 +43,7 @@
                 <TextBox
                     x:Name="CajaDestino"
                     Header="Carpeta destino"
-                    PlaceholderText="Ruta de destino" />
+                    PlaceholderText="Ej. D:\Copias\Documentos" />
                 <Button
                     HorizontalAlignment="Left"
                     Click="BotonDestino_Click"
@@ -55,13 +55,13 @@
                 x:Name="CajaInclusion"
                 Header="Copiar solo archivos que coincidan con"
                 PlaceholderText="*"
-                ToolTipService.ToolTip="Patrones glob separados por ;. Ejemplo: *.pdf;*.docx" />
+                ToolTipService.ToolTip="Patrones glob separados por punto y coma (;). Ejemplo: *.pdf;*.docx" />
 
-            <Expander Header="Omitir archivos (editor visual)" IsExpanded="True">
+            <Expander Header="Omitir archivos o carpetas" IsExpanded="True">
                 <StackPanel Spacing="10">
                     <TextBlock
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Text="Patrones glob separados por regla. Ejemplos: *.tmp, ~$*, node_modules"
+                        Text="Patrones glob por archivo o carpeta. Ejemplos: *.tmp, ~$*, node_modules, .git"
                         TextWrapping="WrapWholeWords" />
                     <ListView
                         x:Name="ListaReglasExclusion"
@@ -76,9 +76,9 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBox
                                         Grid.Column="0"
-                                        PlaceholderText="*.tmp"
+                                        PlaceholderText="Ej. *.tmp o node_modules"
                                         Text="{x:Bind Patron, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                    <Button Grid.Column="1" Click="BotonEliminarRegla_Click" Tag="{x:Bind}">
+                                    <Button Grid.Column="1" Click="BotonEliminarRegla_Click" Tag="{x:Bind}" ToolTipService.ToolTip="Quitar regla">
                                         <SymbolIcon Symbol="Delete" />
                                     </Button>
                                 </Grid>
@@ -102,15 +102,27 @@
                 HorizontalAlignment="Stretch"
                 SelectedIndex="0"
                 SelectionChanged="DesplegableModo_SelectionChanged">
-                <ComboBoxItem Content="Acumulativo sin borrado (Principal / Predeterminado)" Tag="0" />
-                <ComboBoxItem Content="Acumulativo con borrado en origen (Requiere Admin Local)" Tag="1" />
-                <ComboBoxItem Content="Espejo — Mirror (Sincronización total idéntica A -> B)" Tag="2" />
+                <ComboBoxItem Content="Acumulativo sin borrado (predeterminado)" Tag="0" />
+                <ComboBoxItem Content="Acumulativo con borrado en origen (requiere administrador local)" Tag="1" />
+                <ComboBoxItem Content="Espejo (sincronización idéntica A → B)" Tag="2" />
             </ComboBox>
             <TextBlock
                 x:Name="TextoExplicacionModo"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                Text="Guarda todos los archivos de A en B. No borra nada en B ni en A aunque se eliminen archivos en el Origen."
+                Text="Copia todos los archivos de origen a destino. No elimina nada en destino ni en origen aunque se borren archivos en origen."
                 TextWrapping="WrapWholeWords" />
+
+            <NumberBox
+                x:Name="CajaUmbralPurga"
+                Header="Límite de seguridad ante borrado masivo en espejo (archivos)"
+                Visibility="Collapsed"
+                Minimum="1"
+                Maximum="100000"
+                Value="50"
+                SpinButtonPlacementMode="Inline"
+                SmallChange="10"
+                LargeChange="50"
+                ToolTipService.ToolTip="Si en una pasada faltan más archivos que este límite, SManager detiene el borrado y te pide confirmación." />
 
             <StackPanel Orientation="Horizontal" Spacing="24">
                 <ToggleSwitch x:Name="InterruptorActivo" Header="Activo" OnContent="Sí" OffContent="No" />
@@ -128,7 +140,7 @@
                 ToolTipService.ToolTip="0 = usar el intervalo global de Ajustes. Mínimo efectivo: 30 s." />
             <TextBlock
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                Text="Red de seguridad si el vigilante de archivos pierde eventos. Los cambios normales los detecta el FileSystemWatcher en segundos."
+                Text="Red de seguridad si el vigilante de archivos pierde algún evento. Los cambios normales se detectan en pocos segundos."
                 TextWrapping="WrapWholeWords" />
         </StackPanel>
     </ScrollViewer>

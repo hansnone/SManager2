@@ -19,6 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\SManager.Core\SManager.Core.csproj" />
     <ProjectReference Include="..\..\src\SManager.Ipc\SManager.Ipc.csproj" />
+    <ProjectReference Include="..\..\src\SManager.Gui.Shared\SManager.Gui.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>
